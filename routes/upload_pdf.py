@@ -1,10 +1,10 @@
-from fastapi import FastAPI,UploadFile
+from fastapi import FastAPI,UploadFile,APIRouter
 from uuid import uuid4
 
-app = FastAPI()
+upload_pdf_app = APIRouter()
 
 
-@app.post('/')
+@upload_pdf_app.post('/')
 async def upload_pdf(file:UploadFile):
     
     file_path = f"/mnt/uploads/{id}/{file.filename}"
