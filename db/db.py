@@ -3,12 +3,16 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, Asyn
 from sqlalchemy.future import select
 from contextlib import asynccontextmanager
 from .models import Base, MasterDocs
+import os
+from dotenv import load_dotenv
 
-postgres_user=""
-postgres_password=""
-host = ""
-db_name=""
-port=""
+load_dotenv()
+
+postgres_user=os.getenv("POSTGRES_USER")
+postgres_password=os.getenv("POSTGRES_PASSWORD")
+host = os.getenv("HOST")
+db_name=os.getenv("POSTGRES_DB")
+port=os.getenv("PORT")
 
 DATABASE_URL = f"postgresql+asyncpg://{postgres_user}:{postgres_password}@{host}:{port}/{db_name}"
 
@@ -44,3 +48,13 @@ async def init_db():
         await conn.run_sync(Base.metadata.create_all)
     
     print("Database initialized")
+
+
+async def drip_db():
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+    
+    print("Database tables dropped")
+    
+
+
