@@ -4,9 +4,11 @@ from sqlalchemy.future import select
 from contextlib import asynccontextmanager
 from .models import Base, MasterDocs
 import os
-from dotenv import load_dotenv
+from dotenv import load_dotenv, find_dotenv
+# from env import port,postgres_password,postgres_user,host,db_name
 
-load_dotenv()
+
+load_dotenv(find_dotenv())
 
 postgres_user=os.getenv("POSTGRES_USER")
 postgres_password=os.getenv("POSTGRES_PASSWORD")
@@ -14,7 +16,10 @@ host = os.getenv("HOST")
 db_name=os.getenv("POSTGRES_DB")
 port=os.getenv("PORT")
 
+print(postgres_password," ||| ",postgres_user," ||| ",host," ||| ",db_name," ||| ",port," --------------")
 DATABASE_URL = f"postgresql+asyncpg://{postgres_user}:{postgres_password}@{host}:{port}/{db_name}"
+
+print(DATABASE_URL,'======||+++++++++++++++++++++++++')
 
 engine = create_async_engine(
     DATABASE_URL,
