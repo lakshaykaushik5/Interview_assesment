@@ -29,4 +29,4 @@ def test():
 app.include_router(router,prefix="/v1",tags=["v1"])
 
 if __name__=='__main__':
-    uvicorn.run(app,host="localhost",port = 4001)
+    uvicorn.run(app,host="localhost",port = 4001,reload=True)

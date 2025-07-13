@@ -17,4 +17,4 @@ class MasterDocs(Base):
     updated_at = Column(DateTime(timezone=True),server_default=func.now(),onupdate=func.now())
     
     def __repr__(self):
-        return f"<MasterDocs(id={self.id},path={self.path})>"
+        return f"<MasterDocs(id='{self.id}',path='{self.path}',type={self.type},is_active={self.is_active})>"

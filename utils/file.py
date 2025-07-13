@@ -3,9 +3,13 @@ import aiofiles
 
 
 async def save_to_disk(file:bytes,path:str):
-    os.makedirs(os.path.dirname(path),exist_ok=True)
+    try:
+        os.makedirs(os.path.dirname(path),exist_ok=True)
     
-    async with aiofiles.open(path,'wb') as out_file:
-        await out_file.write(file)
-        
-    return True
+        async with aiofiles.open(path,'wb') as out_file:
+            await out_file .write(file)
+            
+        return True
+    except Exception as e:
+        print(f"Error in utils :-: ",e)
+        return False
