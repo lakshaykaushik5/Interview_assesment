@@ -1,6 +1,7 @@
 import os
 import aiofiles
-
+from db import redis_connection
+import json
 
 async def save_to_disk(file:bytes,path:str):
     try:
@@ -12,4 +13,18 @@ async def save_to_disk(file:bytes,path:str):
         return True
     except Exception as e:
         print(f"Error in utils :-: ",e)
+        return False
+    
+
+def enqueue_file(file_type:any,payload:any):
+    try:
+        message = json.dumps({
+            "file_type":file_type,
+            "payload":payload
+        })
+        
+        redis_connection.rpush(file_type,message)
+        return True
+    except Exception as e:
+        print(f" Error in enqueue_file ::-:: {e}")
         return False

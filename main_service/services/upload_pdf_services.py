@@ -2,7 +2,7 @@ import os
 from fastapi import HTTPException,UploadFile,status
 from fastapi.responses import JSONResponse
 from db import get_session, MasterDocs
-from utils import save_to_disk
+from utils import save_to_disk,enqueue_file
 
 
 async def upload_pdf_service(file:UploadFile):
@@ -30,9 +30,11 @@ async def upload_pdf_service(file:UploadFile):
 
         await save_to_disk(file=await file.read() ,path=file_path)
         
+        enqueue_file("Resume",{"id":str(id),"path":file_name,"web_hook_url":None})
+        
         return JSONResponse(
             status_code=status.HTTP_200_OK,
-            content= str(id)
+            content=str(id)
         )
         
         
