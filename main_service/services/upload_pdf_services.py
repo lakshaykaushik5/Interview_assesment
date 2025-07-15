@@ -24,13 +24,19 @@ async def upload_pdf_service(file:UploadFile):
         
         if id ==None:
             HTTPException(status_code=404,detail="File Name Not Found")
+        # Save files in same folder
+        # upload_dir = os.path.join(os.getcwd(), "uploads", str(id))
+        # file_path = os.path.join(upload_dir, file.filename)
+
+        # Save file in shared folder    
+        base_dir = os.path.abspath(os.path.join(os.getcwd(),os.pardir))
         
-        upload_dir = os.path.join(os.getcwd(), "uploads", str(id))
-        file_path = os.path.join(upload_dir, file.filename)
+        upload_dir = os.path.join(base_dir,"uploads",str(id))
+        file_path = os.path.join(upload_dir,file_name)
 
         await save_to_disk(file=await file.read() ,path=file_path)
         
-        enqueue_file("Resume",{"id":str(id),"path":file_name,"web_hook_url":None})
+        enqueue_file("Resume",{"id":str(id),"path":file_path,"web_hook_url":None})
         
         return JSONResponse(
             status_code=status.HTTP_200_OK,
