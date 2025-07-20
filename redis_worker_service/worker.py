@@ -3,18 +3,25 @@ from rq import Worker,Queue
 import json
 import time
 import os
+from ingestion import injestion
+from dotenv import load_dotenv,find_dotenv
 
-redis_conn = Redis(host="localhost",port=6379)
-queue_name = 'Resume'
+
+load_dotenv(find_dotenv())
+
+redis_conn = Redis(host=os.getenv("REDIS_HOST"),port=os.getenv("REDIS_PORT"))
+queue_name = os.getenv("QUEUE_NAME")
 
 
-def process_message(json_message_string):
+async def process_message(json_message_string):
     print(". . .Job Recieved. . . ",json_message_string)
     try:
         job_data = json.loads(json_message_string)
         print(job_data," +++++++++++++++++")
         file_path = job_data.get('payload').get('path')
         doc_id = job_data.get('payload').get("id")
+        
+        
         
         if not file_path or not doc_id:
             print("Error in redis worder file path or id not found")
@@ -24,6 +31,7 @@ def process_message(json_message_string):
             print(f"File not found on path {file_path}")
             return
         print("file found at path ",file_path)
+        await injestion(file_path,doc_id) 
         return True
     except json.JSONDecodeError:
         print(f"Error Recieved non json message :{json_message_string}")

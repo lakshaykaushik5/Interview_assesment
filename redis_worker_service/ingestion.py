@@ -4,7 +4,6 @@ from ResumeProcessWithAi import resume_processing_with_ai
 from config import memory
 
 import asyncio
-import os
 
 
 

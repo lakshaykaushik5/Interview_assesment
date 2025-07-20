@@ -2,7 +2,6 @@ from prompts import resume_proceesing_prompt
 from openai import AsyncOpenAI
 
 from dotenv import load_dotenv,find_dotenv
-import json
 
 import os
 
