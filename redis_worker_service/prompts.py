@@ -3,7 +3,7 @@ achievement_prompt = f"""
         Focus on measurable results, technical accomplishments, and business impact.
         Return a concise summary of the main achievements.
         
-        Project Description: {project_description}
+        Project Description: {"project_description"}
         
         Return only the achievements summary, no additional text.
         """
@@ -68,7 +68,7 @@ extraction_prompt = f"""
         }}
         
         Resume Text:
-        {text}
+        {"text"}
         
         Return only the JSON object, no additional text.
         """

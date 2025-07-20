@@ -42,7 +42,7 @@ services:
     environment:
       NEO4J_AUTH: neo4j/password123       # change this in production
       NEO4J_dbms_security_auth__enabled: "true"
-      NEO4J_dbms_default__database: knowledgegraph.db
+      NEO4J_dbms_default__database: neo4j
       NEO4J_server_memory_heap_initial__size: 2G
       NEO4J_server_memory_heap_max__size: 4G
       NEO4J_dbms_memory_pagecache_size: 2G

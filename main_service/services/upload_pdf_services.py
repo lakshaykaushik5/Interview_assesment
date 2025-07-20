@@ -37,6 +37,7 @@ async def upload_pdf_service(file:UploadFile):
         await save_to_disk(file=await file.read() ,path=file_path)
         
         enqueue_file("Resume",{"id":str(id),"path":file_path,"web_hook_url":None})
+        print("sending file ..................................................")
         
         return JSONResponse(
             status_code=status.HTTP_200_OK,
