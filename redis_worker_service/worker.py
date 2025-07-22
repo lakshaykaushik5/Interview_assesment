@@ -18,10 +18,10 @@ async def process_message(json_message_string):
     print(". . .Job Recieved. . . ",json_message_string)
     try:
         job_data = json.loads(json_message_string)
-        print(job_data," +++++++++++++++++")
         file_path = job_data.get('payload').get('path')
         doc_id = job_data.get('payload').get("id")
-        
+        print(doc_id," +++++++++++++++++++++++++++++++++++++",file_path)
+
         
         
         if not file_path or not doc_id:

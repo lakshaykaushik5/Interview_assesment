@@ -33,9 +33,25 @@ async def injestion(file_path:str,user_id:str):
         
         resume_name = file_path.split('/')[-1]
         print("here ----------------------- 4----------------------")
-        for i,chunk in enumerate(chunks):
-            memory_result = memory.add(
-                messages=[{
+        # for i,chunk in enumerate(chunks):
+        #     memory_result = memory.add(
+                # messages=[{
+                #     "role":"user",
+                #     "content":f"resume section {chunk}",
+                #     "metadata": {
+                #         "resume_name": resume_name,
+                #         "chunk_index": i,
+                #         "total_chunks": len(chunks),
+                #         "file_path": file_path
+                #     }
+
+                # }],
+        #         user_id=user_id
+                
+        #     )
+        #     memories.append(memory_result)
+        
+        messages_to_add = [{
                     "role":"user",
                     "content":f"resume section {chunk}",
                     "metadata": {
@@ -45,12 +61,15 @@ async def injestion(file_path:str,user_id:str):
                         "file_path": file_path
                     }
 
-                }],
-                user_id=user_id
-                
+                } for i,chunk in enumerate(chunks)
+                           ]
+        
+        if messages_to_add:
+            await asyncio.get_running_loop().run_in_executor(
+                None,
+                lambda:memory.add(messages=messages_to_add,user_id=user_id)
             )
-            memories.append(memory_result)
-            
+        
         print("here ----------------------- 5----------------------")
             
         return {
