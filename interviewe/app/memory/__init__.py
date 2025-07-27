@@ -1,0 +1,1 @@
+from .config import memory_retrival, memory_conversation
