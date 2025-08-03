@@ -15,6 +15,7 @@ llm = ChatOpenAI(
     model=os.getenv('MODEL_LLM_1'),
     api_key=os.getenv("MODEL_LLM_1_API_KEY")
 )
+    
 
 
 # Top level supervisor for hierarchical orchestration
@@ -101,6 +102,8 @@ async def sentiment_analysis_node(state:InterviewState):
     ])
     
     return {
-        "sentiment":sentiment_report.get("sentiment","neutral"),
-        "confidence":sentiment_report.get("confidence",0)
+        "question_history":{
+            "sentiment":sentiment_report.get("sentiment","neutral"),
+            "confidence":sentiment_report.get("confidence",0)
+        }
     }
