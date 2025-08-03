@@ -22,7 +22,16 @@ def response_evaluator_prompt(last_message_content):
         - Communication clarity
         - Problem Solving approach
         - Cultural fit indicators
+        - Follow up needed
         
         Also determine if a follow-up question is needed.
         Return JSON format with stores and follow_up_needed boolean. 
+    """
+    
+    
+def sentiment_analysis_prompt(last_message):
+    return f"""
+        Analyze the sentiment and confidence level of the response:
+        Response:{last_message}
+        Return Sentiment (positive/netural/negative) and confidence score (0-1).
     """

@@ -5,7 +5,7 @@ from dotenv import load_dotenv,find_dotenv
 import os
 from app.langgraph import InterviewEvent,InterviewState
 from memory import memory_retrival, memory_conversation
-from prompts import question_generator_prompt,response_evaluator_prompt
+from prompts import question_generator_prompt,response_evaluator_prompt,sentiment_analysis_prompt
 from datetime import datetime
 
 load_dotenv(find_dotenv())
@@ -35,10 +35,12 @@ async def supervisor_node(state:InterviewState):
     
 
 # Generate contextual question based on candidate's profile
-async def question_generator_node(state:InterviewState,query:str):
+async def question_generator_node(state:InterviewState):
     candidate_context = state.get("interview_context",{})
     candidate_id = state.get('candidate_id','')
-    # memory_context = "\n".join([mem.get("memory","") for mem in memories[:3]])
+
+    query = state["messages"][-1]
+
     memory_resume = await memory_retrival.search(query=query,user_id=candidate_id)
     memory_conv = await memory_conversation.search(query=query,user_id=candidate_id) 
     
@@ -82,6 +84,23 @@ async def response_evaluator_node(state:InterviewState):
     ])
     
     return {
-        "evaluation_scores":evaluator_response
+        "evaluation_scores":evaluator_response,
+        "follow_up_needed":evaluator_response.get("follow-up",False)
     }
     
+
+async def sentiment_analysis_node(state:InterviewState):
+    last_message = state["messages"][-1] if state["messages"] else None
+    if not last_message:
+        return {"sentiment":"neutral","confidence":0}
+    
+    system_prompt = sentiment_analysis_prompt(last_message)
+    
+    sentiment_report = await llm.ainvoke([
+        SystemMessage(content=system_prompt)
+    ])
+    
+    return {
+        "sentiment":sentiment_report.get("sentiment","neutral"),
+        "confidence":sentiment_report.get("confidence",0)
+    }
