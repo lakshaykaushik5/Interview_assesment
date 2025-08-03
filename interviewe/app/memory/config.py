@@ -1,4 +1,4 @@
-from mem0 import Memory
+from mem0 import Memory,AsyncMemory
 from dotenv import find_dotenv,load_dotenv
 import asyncio
 import os
@@ -74,5 +74,5 @@ mem0_conversation_config = {
 }
 
 
-memory_conversation = Memory.from_config(mem0_conversation_config)
-memory_retrival = Memory.from_config(mem0_config)
+memory_conversation = AsyncMemory.from_config(mem0_conversation_config)
+memory_retrival = AsyncMemory.from_config(mem0_config)
