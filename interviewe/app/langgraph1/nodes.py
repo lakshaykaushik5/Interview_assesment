@@ -3,8 +3,9 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage,HumanMessage,AIMessage
 from dotenv import load_dotenv,find_dotenv
 import os
-from app.langgraph import InterviewEvent,InterviewState
-from memory import memory_retrival, memory_conversation
+import json
+from langgraph1 import InterviewEvent,InterviewState
+from memory.config import initialize_memories
 from prompts import question_generator_prompt,response_evaluator_prompt,sentiment_analysis_prompt
 from datetime import datetime
 
@@ -40,7 +41,9 @@ async def question_generator_node(state:InterviewState):
     candidate_context = state.get("interview_context",{})
     candidate_id = state.get('candidate_id','')
 
-    query = state["messages"][-1]
+    memory_conversation, memory_retrival = await initialize_memories()
+
+    query = state["messages"][-1].content
 
     memory_resume = await memory_retrival.search(query=query,user_id=candidate_id)
     memory_conv = await memory_conversation.search(query=query,user_id=candidate_id) 
@@ -58,8 +61,8 @@ async def question_generator_node(state:InterviewState):
     
     
     response = await llm.ainvoke([
-        SystemMessage(context=system_prompt),
-        HumanMessage(context="Generate the Next Interview Question")
+        SystemMessage(content=system_prompt),
+        HumanMessage(content="Generate the Next Interview Question")
     ])
     
     return {
@@ -80,9 +83,10 @@ async def response_evaluator_node(state:InterviewState):
     
     system_prompt = response_evaluator_prompt(last_message)
     
-    evaluator_response = await llm.ainvoke([
+    evaluator_response_str = await llm.ainvoke([
         SystemMessage(content=system_prompt)
     ])
+    evaluator_response = json.loads(evaluator_response_str.content)
     
     return {
         "evaluation_scores":evaluator_response,
@@ -97,13 +101,16 @@ async def sentiment_analysis_node(state:InterviewState):
     
     system_prompt = sentiment_analysis_prompt(last_message)
     
-    sentiment_report = await llm.ainvoke([
+    sentiment_report_str = await llm.ainvoke([
         SystemMessage(content=system_prompt)
     ])
+    print("sentiment_report_str.content:", sentiment_report_str.content," ____________________________")
+
+    sentiment_report = json.loads(sentiment_report_str.content)
     
     return {
-        "question_history":{
-            "sentiment":sentiment_report.get("sentiment","neutral"),
-            "confidence":sentiment_report.get("confidence",0)
+        "question_history": {
+            "sentiment": sentiment_report.get("sentiment", "neutral"),
+            "confidence": sentiment_report.get("confidence", 0)
         }
     }

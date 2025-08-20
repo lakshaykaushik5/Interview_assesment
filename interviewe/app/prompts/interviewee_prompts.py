@@ -31,7 +31,7 @@ def response_evaluator_prompt(last_message_content):
     
 def sentiment_analysis_prompt(last_message):
     return f"""
-        Analyze the sentiment and confidence level of the response:
+        Analyze the sentiment and confidence level of the response and strictly follow this output structure nothing extra in json format:
         Response:{last_message}
         Return Sentiment (positive/netural/negative) and confidence score (0-1).
     """
