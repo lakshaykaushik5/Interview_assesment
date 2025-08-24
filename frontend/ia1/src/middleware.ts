@@ -1,20 +1,36 @@
-// import { clerkMiddleware } from '@clerk/nextjs/server';
-
-// export default clerkMiddleware();
-
-// export const config = {
-//   matcher: [
-//     // Skip Next.js internals and all static files, unless found in search params
-//     '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-//     // Always run for API routes
-//     '/(api|trpc)(.*)',
-//   ],
-// };
+import { getToken } from "next-auth/jwt";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import { PrismaClient } from "@prisma/client";
 
 
-import { clerkMiddleware } from '@clerk/nextjs/server';
+const prisma = new PrismaClient()
 
-export default clerkMiddleware();
+export async function middleware(req:NextRequest){
+    const token = await getToken({req,secret:process.env.NEXTAUTH_SECRET})
+    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.ip || ""
 
+    if(token?.sub){
+        // prisma.user.update({
+        //     where:{id:token.sub},
+        //     data:{ipAddress:ip},
+        // }).catch(()=>{})
+        console.log(" --ip-- ",ip)
+    }
 
-// export const config = {matcher:['/protect-route']}
+    if(req.nextUrl.pathname.startsWith("/dashboard") && !token){
+        const signInUrl = new URL("/api/auth/signin",req.url)
+        return NextResponse.redirect(signInUrl)
+    }
+
+    if(req.nextUrl.pathname === "/" && token){
+        const dashboardUrl = new URL("/dashboard",req.url)
+        return NextResponse.redirect(dashboardUrl)
+    }
+
+    return NextResponse.next()
+}
+
+export const config ={
+    matcher:["/dashboard/:path*","/"]
+}

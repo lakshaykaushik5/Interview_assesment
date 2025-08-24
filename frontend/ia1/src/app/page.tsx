@@ -1,103 +1,156 @@
-import Image from "next/image";
+import React from "react";
+import Link from "next/link";
+
+
+interface FeatureCardProps {
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+}
+
+const FeatureCard: React.FC<FeatureCardProps> = ({ title, description, icon }) => {
+  return (
+    <div className="bg-gray-800 rounded-xl p-6 shadow-lg flex flex-col items-center text-center space-y-4 
+                    transition-transform transform hover:scale-105 hover:shadow-2xl cursor-pointer">
+      <div className="transition-colors duration-300 hover:text-purple-400 hover:scale-110">
+        {icon}
+      </div>
+      <h3 className="text-xl font-semibold">{title}</h3>
+      <p className="text-gray-400">{description}</p>
+    </div>
+  );
+};
 
 export default function Home() {
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <main className="min-h-screen bg-gradient-to-tr from-gray-900 via-purple-900 to-indigo-900 text-white font-sans">
+      {/* Header with logo and product name */}
+      <header className="flex items-center gap-3 p-6 max-w-7xl mx-auto">
+        {/* Inline SVG Logo */}
+        <svg
+          width="40"
+          height="40"
+          viewBox="0 0 24 24"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          className="text-purple-400 transition-colors duration-300 hover:text-purple-600"
+        >
+          <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" />
+          <path
+            d="M8 12l2 2 4-4"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+        <h1 className="text-3xl font-bold tracking-wide">IA1</h1>
+      </header>
+
+      {/* Hero Section */}
+      <section className="flex flex-col items-center justify-center text-center px-6 py-20 max-w-4xl mx-auto space-y-6">
+        <h2 className="text-5xl font-extrabold leading-tight">
+          Practice Interviews with AI and Get Instant Feedback
+        </h2>
+        <p className="text-lg max-w-xl text-purple-300">
+          IA1 is an AI-powered interview platform. Simulate real interviews and improve quickly. Currently in beta.
+        </p>
+        <Link href={"auth/sign-in"}>
+          <button className="bg-purple-600 hover:bg-purple-700 transition-shadow rounded-full px-10 py-3 text-white font-semibold shadow-lg hover:shadow-2xl">
+            Try the Beta
+          </button>
+        </Link>
+
+        {/* Placeholder Hero Illustration */}
+        <div className="mt-12 w-full max-w-lg aspect-video bg-gradient-to-r from-purple-700 to-indigo-700 rounded-xl shadow-xl flex items-center justify-center">
+          <svg
+            width="150"
+            height="150"
+            viewBox="0 0 24 24"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            className="text-white opacity-60"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+            <rect x="3" y="3" width="18" height="18" rx="3" stroke="currentColor" strokeWidth="2" />
+            <path d="M8 12h8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            <path d="M12 8v8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
+      </section>
+
+      {/* Features Section */}
+      <section className="max-w-6xl mx-auto px-6 py-20 grid grid-cols-1 md:grid-cols-3 gap-10">
+        <FeatureCard
+          title="Simulate Real Interviews"
+          description="Practice with realistic questions tailored for your field."
+          icon={
+            <svg
+              className="w-12 h-12 text-indigo-400"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 14l9-5-9-5-9 5 9 5z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 14l6.16-3.422a12.083 12.083 0 010 6.844L12 14z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 14v7" />
+            </svg>
+          }
+        />
+        <FeatureCard
+          title="Instant AI Feedback"
+          description="Get detailed feedback to know exactly where to improve."
+          icon={
+            <svg
+              className="w-12 h-12 text-purple-400"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <circle cx="12" cy="12" r="3" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19.4 15a7.97 7.97 0 010-6" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4.6 9a7.973 7.973 0 010 6" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 3.6v16.8" />
+            </svg>
+          }
+        />
+        <FeatureCard
+          title="Track Your Progress"
+          description="Visualize your improvements over sessions, stay motivated."
+          icon={
+            <svg
+              className="w-12 h-12 text-pink-400"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 3v18h18" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l3 3-3 3" />
+            </svg>
+          }
+        />
+      </section>
+
+      {/* Beta Notification */}
+      <section className="bg-purple-800 text-center text-purple-200 py-8 px-6 max-w-3xl mx-auto rounded-xl">
+        <p className="font-semibold text-lg">
+          ⚠️ IA1 is currently in Beta. Your feedback helps shape the future of AI interview coaching!
+        </p>
+      </section>
+
+      {/* Footer */}
+      <footer className="text-center py-10 text-gray-400">
+        <p>© 2025 IA1 • Built with ❤️ for interview success</p>
+        <p>
+          Contact: <a href="mailto:info@ia1.com" className="underline hover:text-white">info@ia1.com</a>
+        </p>
       </footer>
-    </div>
+    </main>
   );
 }
