@@ -9,7 +9,7 @@ import { useEffect } from "react";
 
 export default function Page() {
 
-  const {status} = useSession();
+  const {data:session,status} = useSession();
   const router = useRouter()
 
   useEffect(()=>{

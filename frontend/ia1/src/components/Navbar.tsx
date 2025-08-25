@@ -1,79 +1,197 @@
 "use client";
+
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useUser, SignInButton, SignOutButton } from "@clerk/nextjs";
+import { Book, Menu, Sunset, Trees, Zap } from "lucide-react";
 
-export default function Navbar() {
-  const pathname = usePathname();
-  const { isSignedIn, isLoaded } = useUser();
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { Button } from "@/components/ui/button";
+import {
+  NavigationMenu,
+  NavigationMenuContent,
+  NavigationMenuItem,
+  NavigationMenuLink,
+  NavigationMenuList,
+  NavigationMenuTrigger,
+} from "@/components/ui/navigation-menu";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 
-  // Don’t show on homepage ("/")
-  if (pathname === "/") return null;
+interface MenuItem {
+  title: string;
+  url: string;
+  description?: string;
+  icon?: React.ReactNode;
+  items?: MenuItem[];
+}
 
-  // Nav links example - add as needed
-  const navLinks = [
-    { label: "Dashboard", href: "/dashboard" },
-    { label: "Profile", href: "/profile" },
-    { label: "Settings", href: "/settings" },
-  ];
+interface NavbarProps {
+  logo?: {
+    url: string;
+    src: string;
+    alt: string;
+    title: string;
+  };
+  menu?: MenuItem[];
+  auth?: {
+    logout: { title: string; url: string; };
+  };
+  onNavbarClick?: () => void;
+}
 
-  const isActive = (href: string) => pathname === href;
+export function Navbar({
+  logo = {
+    url: "/",
+    src: "https://deifkwefumgah.cloudfront.net/shadcnblocks/block/logos/shadcnblockscom-icon.svg",
+    alt: "logo",
+    title: "IA1",
+  },
+  menu = [],
+  auth = {
+    logout: { title: "Logout", url: "/" },
+  },
+  onNavbarClick
+}: NavbarProps) {
+  return (
+    <header className="py-4 border-b bg-background">
+      <div className="container flex items-center justify-between">
+        {/* Left: Logo + Menu */}
+        <div className="flex items-center gap-6">
+          <Link href={logo.url} className="flex items-center gap-2">
+            <img src={logo.src} alt={logo.alt} className="max-h-8 dark:invert" />
+            <span className="text-lg font-semibold tracking-tight">
+              {logo.title}
+            </span>
+          </Link>
+
+          {/* Desktop Menu */}
+          <NavigationMenu className="hidden lg:block">
+            <NavigationMenuList>
+              {menu.map((item) => renderMenuItem(item))}
+            </NavigationMenuList>
+          </NavigationMenu>
+        </div>
+
+        {/* Right: Auth */}
+        <div className="hidden gap-2 lg:flex">
+          <Button variant="outline" size="sm" onClick={onNavbarClick}>
+            {auth.logout.title}
+          </Button>
+        </div>
+
+        {/* Mobile Menu */}
+        <div className="block lg:hidden">
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button variant="outline" size="icon">
+                <Menu className="size-4" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right" className="overflow-y-auto">
+              <SheetHeader>
+                <SheetTitle>
+                  <Link href={logo.url} className="flex items-center gap-2">
+                    <img src={logo.src} alt={logo.alt} className="max-h-8 dark:invert" />
+                    <span className="font-semibold">{logo.title}</span>
+                  </Link>
+                </SheetTitle>
+              </SheetHeader>
+
+              <div className="mt-6 flex flex-col gap-6">
+                <Accordion type="single" collapsible className="w-full flex flex-col gap-2">
+                  {menu.map((item) => renderMobileMenuItem(item))}
+                </Accordion>
+
+                <div className="flex flex-col gap-3">
+                  <Button variant="outline" onClick={onNavbarClick}>
+                    {auth.logout.title}
+                  </Button>
+                </div>
+              </div>
+            </SheetContent>
+          </Sheet>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+/* Desktop Dropdown Handler */
+function renderMenuItem(item: MenuItem) {
+  if (item.items) {
+    return (
+      <NavigationMenuItem key={item.title}>
+        <NavigationMenuTrigger>{item.title}</NavigationMenuTrigger>
+        <NavigationMenuContent className="p-4 grid gap-2 bg-popover text-popover-foreground">
+          {item.items.map((subItem) => (
+            <NavigationMenuLink asChild key={subItem.title} className="w-72">
+              <SubMenuLink item={subItem} />
+            </NavigationMenuLink>
+          ))}
+        </NavigationMenuContent>
+      </NavigationMenuItem>
+    );
+  }
 
   return (
-    <nav className="bg-gray-900 text-white p-4 flex justify-between items-center max-w-7xl mx-auto sticky top-0 z-50 shadow-md">
-      <div className="flex items-center space-x-6">
-        <Link href="/dashboard" className="flex items-center space-x-2">
-          <svg
-            width="36"
-            height="36"
-            viewBox="0 0 24 24"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            className="text-purple-400 transition-colors duration-300 hover:text-purple-600"
-          >
-            <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" />
-            <path
-              d="M8 12l2 2 4-4"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-          <span className="text-2xl font-bold text-purple-400">IA1</span>
+    <NavigationMenuItem key={item.title}>
+      <NavigationMenuLink asChild>
+        <Link
+          href={item.url}
+          className="hover:bg-muted hover:text-accent-foreground inline-flex h-9 items-center rounded-md px-3 text-sm font-medium transition-colors"
+        >
+          {item.title}
         </Link>
+      </NavigationMenuLink>
+    </NavigationMenuItem>
+  );
+}
 
-        {/* <ul className="flex space-x-4">
-          {navLinks.map(({ href, label }) => (
-            <li key={href}>
-              <Link
-                href={href}
-                className={`hover:text-purple-400 transition ${
-                  isActive(href) ? "text-purple-500 font-semibold underline" : ""
-                }`}
-              >
-                {label}
-              </Link>
-            </li>
+/* Mobile Accordion Handler */
+function renderMobileMenuItem(item: MenuItem) {
+  if (item.items) {
+    return (
+      <AccordionItem key={item.title} value={item.title} className="border-b-0">
+        <AccordionTrigger className="py-2 font-medium">{item.title}</AccordionTrigger>
+        <AccordionContent className="mt-2 flex flex-col gap-2">
+          {item.items.map((subItem) => (
+            <SubMenuLink key={subItem.title} item={subItem} />
           ))}
-        </ul> */}
-      </div>
+        </AccordionContent>
+      </AccordionItem>
+    );
+  }
 
+  return (
+    <Link key={item.title} href={item.url} className="text-sm font-medium">
+      {item.title}
+    </Link>
+  );
+}
+
+/* Submenu Link Block */
+function SubMenuLink({ item }: { item: MenuItem }) {
+  return (
+    <Link
+      href={item.url}
+      className="hover:bg-muted hover:text-accent-foreground flex items-start gap-3 rounded-md p-3 transition-colors"
+    >
+      <div className="text-foreground">{item.icon}</div>
       <div>
-        {!isLoaded ? null : isSignedIn ? (
-          <SignOutButton>
-            <button className="bg-red-600 px-5 py-2 rounded-lg text-white hover:bg-red-700 transition">
-              Logout
-            </button>
-          </SignOutButton>
-        ) : (
-          <SignInButton>
-            <button className="bg-green-600 px-5 py-2 rounded-lg text-white hover:bg-green-700 transition">
-              Login
-            </button>
-          </SignInButton>
+        <div className="text-sm font-semibold">{item.title}</div>
+        {item.description && (
+          <p className="text-muted-foreground text-xs">{item.description}</p>
         )}
       </div>
-    </nav>
+    </Link>
   );
 }
