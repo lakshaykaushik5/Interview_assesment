@@ -6,6 +6,7 @@ upload_pdf_app = APIRouter()
 
 @upload_pdf_app.post('/')
 async def upload_pdf(file:UploadFile):
+    print(" ------------------- Here --------------------")
     return await upload_pdf_service(file)
     
     

@@ -12,6 +12,7 @@ async def upload_pdf_service(file:UploadFile):
         
         file_name = file.filename
         id = None
+        
         async with get_session() as session:
             new_doc = MasterDocs(
                 path=file_name

@@ -59,12 +59,12 @@ export default function Page() {
 
             // Create FormData for file upload
             const formData = new FormData();
-            formData.append('resume', selectedFile);
+            formData.append('file', selectedFile);
 
             console.log(formData," | Form Data |")
 
             // Replace this with your actual upload endpoint
-            const response = await fetch('/api/upload-resume', {
+            const response = await fetch('http://localhost:4001/v1/upload-pdf/', {
                 method: 'POST',
                 body: formData,
             });
