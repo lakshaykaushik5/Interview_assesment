@@ -21,8 +21,28 @@ export default function Page() {
     const [uploadStatus, setUploadStatus] = useState<'idle' | 'success' | 'error'>('idle');
     const [showInterviewStartButton, setShowInterviewStartButton] = useState(false)
     const [jobId,setJobId] = useState<string | null>(null)
+    const [jobStatus,setJobStatus] = useState<string|null>(null)
 
-    
+    const submitJob = async ()=>{
+        try{
+            setJobStatus("processing");
+
+            const response = await fetch('http://localhost:4001/v1/upload-pdf/',{
+                method:"POST",
+                headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({
+                    workType:'data-processing',
+                    payload:{data:jobId}
+                })
+            })
+
+            const data = await response.json()
+            setJobStatus(data?.status)
+        }
+        catch(e){
+            console.error(e)
+        }
+    }
 
 
     useEffect(() => {
@@ -88,6 +108,7 @@ export default function Page() {
             if (response.ok) {
                 setUploadStatus('success');
                 setShowInterviewStartButton(true)
+                setJobId(response?.jobId)
             } else {
                 throw new Error('Upload failed');
             }

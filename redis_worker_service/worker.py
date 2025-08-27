@@ -26,6 +26,9 @@ def create_signature(payload:str):
 
 
 
+# def handle_failed_webhook(job_data)
+
+
 def send_webhook(webhook_url:str,id:str):
     """Send webhook notification to frontend"""
     webhook_payload = {
