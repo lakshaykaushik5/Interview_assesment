@@ -20,6 +20,10 @@ export default function Page() {
     const [progress, setProgress] = useState(0);
     const [uploadStatus, setUploadStatus] = useState<'idle' | 'success' | 'error'>('idle');
     const [showInterviewStartButton, setShowInterviewStartButton] = useState(false)
+    const [jobId,setJobId] = useState<string | null>(null)
+
+    
+
 
     useEffect(() => {
         const logOutHandler = () => {
