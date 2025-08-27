@@ -3,10 +3,13 @@ from fastapi import HTTPException,UploadFile,status
 from fastapi.responses import JSONResponse
 from db import get_session, MasterDocs
 from utils import save_to_disk,enqueue_file
+from models import ResumeData
 
 
-async def upload_pdf_service(file:UploadFile):
+async def upload_pdf_service(resume_data:ResumeData):
     try:
+        file=resume_data.file
+        webhook_url = resume_data.webhookurl
         if not file:
             return HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail="File not found")
         
@@ -37,7 +40,7 @@ async def upload_pdf_service(file:UploadFile):
 
         await save_to_disk(file=await file.read() ,path=file_path)
         
-        enqueue_file("Resume",{"id":str(id),"path":file_path,"web_hook_url":None})
+        enqueue_file("Resume",{"id":str(id),"path":file_path,"web_hook_url":str(webhook_url)})
         print("sending file ..................................................")
         
         return JSONResponse(

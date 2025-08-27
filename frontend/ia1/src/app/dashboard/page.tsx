@@ -8,14 +8,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Upload, FileText, CheckCircle, AlertCircle } from "lucide-react";
+import { Upload, FileText, CheckCircle, AlertCircle, CloudCog } from "lucide-react";
+import { useRouter } from "next/navigation";
+
 
 export default function Page() {
+    const router = useRouter()
     const { setOnNavbarClick } = useNavbarContext();
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [uploading, setUploading] = useState(false);
     const [progress, setProgress] = useState(0);
     const [uploadStatus, setUploadStatus] = useState<'idle' | 'success' | 'error'>('idle');
+    const [showInterviewStartButton, setShowInterviewStartButton] = useState(false)
 
     useEffect(() => {
         const logOutHandler = () => {
@@ -26,16 +30,21 @@ export default function Page() {
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
-            console.log(e.target.files[0]," target files")
+            console.log(e.target.files[0], " target files")
             setSelectedFile(e.target.files[0]);
             setUploadStatus('idle');
             setProgress(0);
         }
     };
 
+    const handleStartInterview = ()=>{
+        console.log(" am i here")
+        router.push("/Interview")
+    }
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        
+
         if (!selectedFile) {
             alert('Please select a file first');
             return;
@@ -61,7 +70,7 @@ export default function Page() {
             const formData = new FormData();
             formData.append('file', selectedFile);
 
-            console.log(formData," | Form Data |")
+            console.log(formData, " | Form Data |")
 
             // Replace this with your actual upload endpoint
             const response = await fetch('http://localhost:4001/v1/upload-pdf/', {
@@ -74,6 +83,7 @@ export default function Page() {
 
             if (response.ok) {
                 setUploadStatus('success');
+                setShowInterviewStartButton(true)
             } else {
                 throw new Error('Upload failed');
             }
@@ -82,6 +92,8 @@ export default function Page() {
             console.error('Upload error:', error);
             setUploadStatus('error');
             setProgress(0);
+            setShowInterviewStartButton(false)
+
         } finally {
             setUploading(false);
         }
@@ -111,14 +123,14 @@ export default function Page() {
 
     return (
         <div className="min-h-screen flex items-center justify-center p-4">
-            <Card className="w-full max-w-md">
+            {showInterviewStartButton == false ? <Card className="w-full max-w-md">
                 <CardContent className="pt-6">
                     <form onSubmit={handleSubmit} className="space-y-4">
                         <div className="grid w-full items-center gap-3">
                             <Label htmlFor="resume">Upload Your Resume</Label>
-                            <Input 
-                                id="resume" 
-                                type="file" 
+                            <Input
+                                id="resume"
+                                type="file"
                                 onChange={handleFileChange}
                                 accept=".pdf,.doc,.docx"
                                 disabled={uploading}
@@ -131,8 +143,8 @@ export default function Page() {
                                 {getStatusIcon()}
                                 <span className={
                                     uploadStatus === 'success' ? 'text-green-600' :
-                                    uploadStatus === 'error' ? 'text-red-600' :
-                                    'text-gray-600'
+                                        uploadStatus === 'error' ? 'text-red-600' :
+                                            'text-gray-600'
                                 }>
                                     {getStatusMessage()}
                                 </span>
@@ -151,9 +163,9 @@ export default function Page() {
                         )}
 
                         {/* Submit button */}
-                        <Button 
-                            type="submit" 
-                            className="w-full" 
+                        <Button
+                            type="submit"
+                            className="w-full"
                             disabled={!selectedFile || uploading}
                         >
                             {uploading ? (
@@ -171,6 +183,24 @@ export default function Page() {
                     </form>
                 </CardContent>
             </Card>
+                :
+                <Card className="w-full max-w-md">
+                    <CardContent className="pt-6">
+                        <div className="grid w-full items-center gap-3">
+                            Start the Interview
+                        </div>
+
+                        {/* Submit button */}
+                        <Button
+                            type="submit"
+                            className="w-full"
+                            onClick={handleStartInterview}
+                        // disabled={!selectedFile || uploading}
+                        >
+                            Continue
+                        </Button>
+                    </CardContent>
+                </Card>}
         </div>
     );
 }

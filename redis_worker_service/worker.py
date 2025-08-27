@@ -6,6 +6,10 @@ import os
 from ingestion import injestion
 from dotenv import load_dotenv,find_dotenv
 import asyncio
+import hmac
+import hashlib
+from datetime import datetime
+import requests
 
 load_dotenv(find_dotenv())
 
@@ -14,13 +18,59 @@ queue_name = os.getenv("QUEUE_NAME")
 
 print(queue_name," ___________________")
 
+webhook_secret = ""
+def create_signature(payload:str):
+    """Create HMAC Signature for authentication"""
+    
+    return f"sha256={hmac.new(webhook_secret.encode('uff-8'),payload.encode('utf-8'),hashlib.sha256).hexdigest()}"
+
+
+
+def send_webhook(webhook_url:str,id:str):
+    """Send webhook notification to frontend"""
+    webhook_payload = {
+        "jobId":id,
+        "status":"completed",
+        "timestamp":datetime.now().isoformat()
+    }
+    
+    payload_json = json.dumps(webhook_payload)
+    signature = create_signature(webhook_payload)
+    
+    headers = {
+        "Content-Type":"application/json",
+        "X-Webhook-Signature":signature,
+        "User-Agent":"Worker/Service/1.0"
+    }
+    
+    try:
+        
+        response = requests.post(
+            webhook_url,
+            data=payload_json,
+            headers=headers,
+            timeout=30
+        )
+        
+        if response.status_code==200:
+            print("-------------Webhook--sent--successfully------------------")
+            return True
+        else:
+            print(f"-------------Error : {response.status.code}--------------")
+            return False
+    except exceptions as e:
+        print(f"Error :-: {e}")
+    
+    print("------------done--------------")
+
 async def process_message(json_message_string):
     print(". . .Job Recieved. . . ",json_message_string)
     try:
         job_data = json.loads(json_message_string)
         file_path = job_data.get('payload').get('path')
         doc_id = job_data.get('payload').get("id")
-        print(doc_id," +++++++++++++++++++++++++++++++++++++",file_path)
+        webhook_url = job_data.get('payload').get('web_hook_url')
+        print(doc_id," +++++++++++++++++++++++++++++++++++++",file_path,webhook_url)
 
         
         
@@ -33,6 +83,7 @@ async def process_message(json_message_string):
             return
         print("file found at path ",file_path)
         await injestion(file_path,doc_id) 
+        send_webhook(webhook_url)
         return True
     except json.JSONDecodeError:
         print(f"Error Recieved non json message :{json_message_string}")
