@@ -6,10 +6,13 @@ from utils import save_to_disk,enqueue_file
 from models import ResumeData
 
 
-async def upload_pdf_service(resume_data:ResumeData):
+async def upload_pdf_service(file:UploadFile,webhookurl:str):
+    print(file," ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++",webhookurl)
+
     try:
-        file=resume_data.file
-        webhook_url = resume_data.webhookurl
+        
+        
+        webhook_url = webhookurl
         if not file:
             return HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail="File not found")
         
@@ -40,7 +43,7 @@ async def upload_pdf_service(resume_data:ResumeData):
 
         await save_to_disk(file=await file.read() ,path=file_path)
         
-        enqueue_file("Resume",{"id":str(id),"path":file_path,"web_hook_url":str(webhook_url)})
+        await enqueue_file("Resume",{"id":str(id),"path":file_path,"web_hook_url":webhook_url})
         print("sending file ..................................................")
         
         return JSONResponse(
@@ -51,4 +54,5 @@ async def upload_pdf_service(resume_data:ResumeData):
         
         
     except Exception as e:
+        print(" Error at upload pdf service :-: ",e)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,detail=f"Internal Server Error :-: {e}")

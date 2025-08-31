@@ -1,4 +1,4 @@
-from redis import Redis,exceptions
+from redis import exceptions
 from rq import Worker,Queue
 import json
 import time
@@ -10,26 +10,27 @@ import hmac
 import hashlib
 from datetime import datetime
 import requests
+from redis_client import init_redis
 
 load_dotenv(find_dotenv())
 
-redis_conn = Redis(host=os.getenv("REDIS_HOST"),port=os.getenv("REDIS_PORT"))
+# redis_conn = Redis(host=os.getenv("REDIS_HOST"),port=os.getenv("REDIS_PORT"))
 queue_name = os.getenv("QUEUE_NAME")
 
-print(queue_name," ___________________")
 
-webhook_secret = ""
+
+webhook_secret = os.getenv("WEBHOOK_SECRET")
 def create_signature(payload:str):
     """Create HMAC Signature for authentication"""
     
-    return f"sha256={hmac.new(webhook_secret.encode('uff-8'),payload.encode('utf-8'),hashlib.sha256).hexdigest()}"
+    return f"sha256={hmac.new(webhook_secret.encode('utf-8'),payload.encode('utf-8'),hashlib.sha256).hexdigest()}"
 
 
 
 # def handle_failed_webhook(job_data)
 
 
-def send_webhook(webhook_url:str,id:str):
+async def send_webhook(webhook_url:str,id:str):
     """Send webhook notification to frontend"""
     webhook_payload = {
         "jobId":id,
@@ -38,7 +39,7 @@ def send_webhook(webhook_url:str,id:str):
     }
     
     payload_json = json.dumps(webhook_payload)
-    signature = create_signature(webhook_payload)
+    signature = create_signature(payload_json)
     
     headers = {
         "Content-Type":"application/json",
@@ -59,9 +60,9 @@ def send_webhook(webhook_url:str,id:str):
             print("-------------Webhook--sent--successfully------------------")
             return True
         else:
-            print(f"-------------Error : {response.status.code}--------------")
+            print(f"-------------Error : {response.status_code}--------------")
             return False
-    except exceptions as e:
+    except Exception as e:
         print(f"Error :-: {e}")
     
     print("------------done--------------")
@@ -86,7 +87,7 @@ async def process_message(json_message_string):
             return
         print("file found at path ",file_path)
         await injestion(file_path,doc_id) 
-        send_webhook(webhook_url)
+        await send_webhook(webhook_url,doc_id)
         return True
     except json.JSONDecodeError:
         print(f"Error Recieved non json message :{json_message_string}")
@@ -98,10 +99,12 @@ async def listen_for_jobs():
     print(f"Worker Started .Listening on queue: {queue_name}")
     while True:
         try:
-            message_tuple = redis_conn.blpop(queue_name,timeout=0)
+            redis_conn = await init_redis()
+            message_tuple = await redis_conn.blpop(queue_name,timeout=0)
+            print(message_tuple," =========================================")
             raw_message = message_tuple[1]
             
-            await process_message(raw_message.decode("utf-8"))
+            await process_message(raw_message)
             print(". . . .GOT THE JOB . . . .")
         except exceptions.ConnectionError as e:
             print(f"Connection Error : {e} . Retrying . . . . .")

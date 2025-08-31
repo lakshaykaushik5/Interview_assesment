@@ -20,26 +20,32 @@ export default function Page() {
     const [progress, setProgress] = useState(0);
     const [uploadStatus, setUploadStatus] = useState<'idle' | 'success' | 'error'>('idle');
     const [showInterviewStartButton, setShowInterviewStartButton] = useState(false)
-    const [jobId,setJobId] = useState<string | null>(null)
-    const [jobStatus,setJobStatus] = useState<string|null>(null)
+    const [jobId, setJobId] = useState<string | null>(null)
+    const [jobStatus, setJobStatus] = useState<string | null>(null)
 
-    const submitJob = async ()=>{
-        try{
+    const submitJob = async (content:string) => {
+        try {
             setJobStatus("processing");
-
-            const response = await fetch('http://localhost:4001/v1/upload-pdf/',{
-                method:"POST",
-                headers:{'Content-Type':'application/json'},
-                body:JSON.stringify({
-                    workType:'data-processing',
-                    payload:{data:jobId}
+            alert("Send the request")
+            const response = await fetch('http://localhost:4001/v1/webhook/job-event', {
+                method: "POST",
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    payload: { data: content }
                 })
             })
 
             const data = await response.json()
-            setJobStatus(data?.status)
+            alert("got the reply")
+            console.log(data," _-------")
+            if (data?.status == "Completed") {
+                setJobStatus(data?.status)
+                setShowInterviewStartButton(true)
+            }
+
+
         }
-        catch(e){
+        catch (e) {
             console.error(e)
         }
     }
@@ -61,7 +67,7 @@ export default function Page() {
         }
     };
 
-    const handleStartInterview = ()=>{
+    const handleStartInterview = () => {
         console.log(" am i here")
         router.push("/Interview")
     }
@@ -90,13 +96,12 @@ export default function Page() {
                 });
             }, 200);
 
-            // Create FormData for file upload
             const formData = new FormData();
             formData.append('file', selectedFile);
+            formData.append('webhookurl', 'http://localhost:4001/v1/webhook/list-webhook')
 
             console.log(formData, " | Form Data |")
 
-            // Replace this with your actual upload endpoint
             const response = await fetch('http://localhost:4001/v1/upload-pdf/', {
                 method: 'POST',
                 body: formData,
@@ -104,11 +109,10 @@ export default function Page() {
 
             clearInterval(progressInterval);
             setProgress(100);
-
             if (response.ok) {
                 setUploadStatus('success');
-                setShowInterviewStartButton(true)
-                setJobId(response?.jobId)
+                const content = await response.json()
+                submitJob(content)
             } else {
                 throw new Error('Upload failed');
             }
@@ -150,62 +154,61 @@ export default function Page() {
         <div className="min-h-screen flex items-center justify-center p-4">
             {showInterviewStartButton == false ? <Card className="w-full max-w-md">
                 <CardContent className="pt-6">
-                    <form onSubmit={handleSubmit} className="space-y-4">
-                        <div className="grid w-full items-center gap-3">
-                            <Label htmlFor="resume">Upload Your Resume</Label>
-                            <Input
-                                id="resume"
-                                type="file"
-                                onChange={handleFileChange}
-                                accept=".pdf,.doc,.docx"
-                                disabled={uploading}
-                            />
+                    <div className="grid w-full items-center gap-3">
+                        <Label htmlFor="resume">Upload Your Resume</Label>
+                        <Input
+                            id="resume"
+                            type="file"
+                            onChange={handleFileChange}
+                            accept=".pdf,.doc,.docx"
+                            disabled={uploading}
+                        />
+                    </div>
+
+                    {/* File status */}
+                    {selectedFile && (
+                        <div className="flex items-center gap-2 text-sm">
+                            {getStatusIcon()}
+                            <span className={
+                                uploadStatus === 'success' ? 'text-green-600' :
+                                    uploadStatus === 'error' ? 'text-red-600' :
+                                        'text-gray-600'
+                            }>
+                                {getStatusMessage()}
+                            </span>
                         </div>
+                    )}
 
-                        {/* File status */}
-                        {selectedFile && (
-                            <div className="flex items-center gap-2 text-sm">
-                                {getStatusIcon()}
-                                <span className={
-                                    uploadStatus === 'success' ? 'text-green-600' :
-                                        uploadStatus === 'error' ? 'text-red-600' :
-                                            'text-gray-600'
-                                }>
-                                    {getStatusMessage()}
-                                </span>
+                    {/* Progress bar */}
+                    {uploading && (
+                        <div className="space-y-2">
+                            <div className="flex justify-between text-sm">
+                                <span>Uploading...</span>
+                                <span>{progress}%</span>
                             </div>
-                        )}
+                            <Progress value={progress} className="w-full" />
+                        </div>
+                    )}
 
-                        {/* Progress bar */}
-                        {uploading && (
-                            <div className="space-y-2">
-                                <div className="flex justify-between text-sm">
-                                    <span>Uploading...</span>
-                                    <span>{progress}%</span>
-                                </div>
-                                <Progress value={progress} className="w-full" />
-                            </div>
+                    {/* Submit button */}
+                    <Button
+                        type="submit"
+                        className="w-full"
+                        disabled={!selectedFile || uploading}
+                        onClick={handleSubmit}
+                    >
+                        {uploading ? (
+                            <>
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                Uploading...
+                            </>
+                        ) : (
+                            <>
+                                <Upload className="h-4 w-4 mr-2" />
+                                Upload Resume
+                            </>
                         )}
-
-                        {/* Submit button */}
-                        <Button
-                            type="submit"
-                            className="w-full"
-                            disabled={!selectedFile || uploading}
-                        >
-                            {uploading ? (
-                                <>
-                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                    Uploading...
-                                </>
-                            ) : (
-                                <>
-                                    <Upload className="h-4 w-4 mr-2" />
-                                    Upload Resume
-                                </>
-                            )}
-                        </Button>
-                    </form>
+                    </Button>
                 </CardContent>
             </Card>
                 :

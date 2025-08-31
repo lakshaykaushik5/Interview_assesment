@@ -1,26 +1,36 @@
-import aioredis
 import json
 from sse_starlette import EventSourceResponse
 import os
 from dotenv import load_dotenv,find_dotenv
+from utils import verify_webhook_signature
+import requests
+from fastapi import HTTPException,Request
+from db import init_redis
 
 load_dotenv(find_dotenv())
 
 
-global_redis = None
-
-
-
-async def init_redis():
-    global global_redis
-    if global_redis is None:
-        global_redis = await aioredis.from_url("redis://localhost:6379", decode_responses=True)
-    return global_redis
-
-
-async def list_webhook(webhook_data:dict):
+async def list_webhook(req:Request):
     "Recieve Webhooks from worker service"
     try:
+        raw_data = await req.body()
+        
+        raw_payload_str = raw_data.decode('utf-8')
+        
+        signature = requests.headers.get('x-webhook-signature')
+        
+        if not signature:
+            print("No Signature provided")
+            raise HTTPException(status_code=401,detail="No Signature provided")
+
+        check_signature = verify_webhook_signature(raw_payload_str,signature)
+        
+        if not check_signature:
+            raise HTTPException(status_code=500,detail="Invalid Signature")
+        
+        
+        webhook_data = json.loads(raw_payload_str)
+        
         job_id=webhook_data.get("jobId")
         if not job_id:
             return {"success":False,"error":"Missing Job Id"}
@@ -62,60 +72,4 @@ async def job_events(jobId:str):
     return EventSourceResponse(event_generator())
 
 
-
-# from typing import Dict,Set
-# import redis
-# from datetime import datetime,timedelta
-# import json
-# from sse_starlette.sse import EventSourceResponse
-# import asyncio
-
-
-# active_connection:Dict[str,asyncio.Queue]={}
-
-
-# async def list_webhook(webhook_data:dict):
-#     "recieve webhook from worker"
-#     try:
-#         job_id=webhook_data.get('jobId')
-#         job_status = webhook_data.get('status')
-#         job_timestamp = webhook_data.get('timestamp')
-
-#         if job_id in active_connection:
-#             try:
-#                 await active_connection[job_id].put(json.dumps(webhook_data))
-                
-#             except:
-#                 del active_connection[job_id]
-        
-#         return {'success':True}
-        
-#     except Exception as e:
-#         return
-    
-
-# async def job_events(jobId:str):
-#     """SSE endpoints for specific job updates"""
-    
-#     async def event_generator():
-#         # active_connection[jobId] = True
-#         queue = asyncio.Queue()
-#         active_connection[jobId] = queue
-        
-#         try:
-#             while True:
-#                 message = await queue.get()
-#                 yield {"event":"job_update","data":message}
-                
-#                 data = json.loads(message)
-                
-#                 if data.get("status") in ["completed","failed"]:
-#                     break  
-#         except Exception as e:
-#             return e              
-#         finally:
-#             active_connection.pop(jobId,None)
-    
-#     return EventSourceResponse(event_generator())
-                
 
