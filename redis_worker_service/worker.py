@@ -30,11 +30,11 @@ def create_signature(payload:str):
 # def handle_failed_webhook(job_data)
 
 
-async def send_webhook(webhook_url:str,id:str):
+async def send_webhook(webhook_url:str,id:str,msg:str):
     """Send webhook notification to frontend"""
     webhook_payload = {
         "jobId":id,
-        "status":"completed",
+        "status":msg,
         "timestamp":datetime.now().isoformat()
     }
     
@@ -86,8 +86,16 @@ async def process_message(json_message_string):
             print(f"File not found on path {file_path}")
             return
         print("file found at path ",file_path)
-        await injestion(file_path,doc_id) 
-        await send_webhook(webhook_url,doc_id)
+        task_ingestion = asyncio.create_task(injestion(file_path,doc_id))
+        task_send_update = asyncio.create_task(send_webhook(webhook_url,doc_id,"Started Ingestion"))
+        result_ingestion = await task_ingestion
+        await task_send_update
+        msg = ""
+        if result_ingestion.get("status") == "failed":
+            msg = "failed ingestion"
+        else:
+            msg = "completed"
+        await send_webhook(webhook_url,doc_id,msg)
         return True
     except json.JSONDecodeError:
         print(f"Error Recieved non json message :{json_message_string}")

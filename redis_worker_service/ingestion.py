@@ -73,12 +73,15 @@ async def injestion(file_path:str,user_id:str):
         print("here ----------------------- 5----------------------")
             
         return {
+            "status":"success",
            "user_id": user_id,
            "resume_name": resume_name,
            "total_chunks": len(chunks)
         }
     except Exception as e:
         print(f"Error at injestion :: {str(e)}")
+
+        return {"status":"failed","error":e}
 
 
 async def main():

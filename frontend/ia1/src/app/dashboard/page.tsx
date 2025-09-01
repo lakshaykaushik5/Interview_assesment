@@ -21,7 +21,7 @@ export default function Page() {
     const [uploadStatus, setUploadStatus] = useState<'idle' | 'success' | 'error'>('idle');
     const [showInterviewStartButton, setShowInterviewStartButton] = useState(false)
     const [jobId, setJobId] = useState<string | null>(null)
-    const [jobStatus, setJobStatus] = useState<string | null>(null)
+    const [jobStatus, setJobStatus] = useState<string | null>("Upload Resume")
 
     const submitJob = async (content:string) => {
         try {
@@ -35,14 +35,63 @@ export default function Page() {
                 })
             })
 
-            const data = await response.json()
-            alert("got the reply")
-            console.log(data," _-------")
-            if (data?.status == "Completed") {
-                setJobStatus(data?.status)
-                setShowInterviewStartButton(true)
+            if(!response.ok){
+                throw new Error(`HTTP error ! status : ${response.status}`)
             }
 
+            const reader = response.body?.getReader()
+            const decoder = new TextDecoder()
+            let buffer:string | undefined= ''
+
+
+            while(true){
+                const result = await reader?.read()
+                if(!result){
+                    console.log("Read result is undefined")
+                    break
+                }
+
+                const {done,value} = result
+                if(done){break}
+                buffer += decoder.decode(value,{stream:true})
+
+                let lines :any= ""
+                if(buffer){
+                    lines = buffer.split('\n')
+                }
+                buffer = lines.pop()
+
+                for(const lineIndex in lines){
+                    let line = lines[lineIndex] 
+                    if(line.startsWith('data:')){
+                        const jsonStr = line.slice(6).trim()
+
+                        try {
+                            const data = JSON.parse(jsonStr)
+
+                            if(data?.status === "completed"){
+                                setJobStatus(data?.status)
+                                setShowInterviewStartButton(true)
+                                alert("got the job")
+                                return
+                            }
+                            else if(data?.status === "failed ingestion"){
+                                setJobStatus(data?.status)
+                                alert("Internal server error retry after some time")
+                                return
+                            }
+                            else if(data?.status === "Started Ingestion"){
+                                setJobStatus(data?.status)
+                            }
+                        } catch (parseError) {
+                            console.error("Failed to parse JSON",parseError)
+
+                        }
+                    }
+                }
+
+
+            }
 
         }
         catch (e) {
@@ -112,6 +161,7 @@ export default function Page() {
             if (response.ok) {
                 setUploadStatus('success');
                 const content = await response.json()
+                setJobStatus("Processing")
                 submitJob(content)
             } else {
                 throw new Error('Upload failed');
@@ -205,7 +255,7 @@ export default function Page() {
                         ) : (
                             <>
                                 <Upload className="h-4 w-4 mr-2" />
-                                Upload Resume
+                                {jobStatus}
                             </>
                         )}
                     </Button>

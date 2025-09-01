@@ -3,7 +3,7 @@ from sse_starlette import EventSourceResponse
 import os
 from dotenv import load_dotenv,find_dotenv
 from utils import verify_webhook_signature
-import requests
+
 from fastapi import HTTPException,Request
 from db import init_redis
 
@@ -15,9 +15,11 @@ async def list_webhook(req:Request):
     try:
         raw_data = await req.body()
         
+        
         raw_payload_str = raw_data.decode('utf-8')
         
-        signature = requests.headers.get('x-webhook-signature')
+        signature = req.headers.get('x-webhook-signature')
+        
         
         if not signature:
             print("No Signature provided")
@@ -25,11 +27,13 @@ async def list_webhook(req:Request):
 
         check_signature = verify_webhook_signature(raw_payload_str,signature)
         
+        
         if not check_signature:
             raise HTTPException(status_code=500,detail="Invalid Signature")
         
         
         webhook_data = json.loads(raw_payload_str)
+        
         
         job_id=webhook_data.get("jobId")
         if not job_id:
@@ -41,6 +45,7 @@ async def list_webhook(req:Request):
         
         return {"success":True}
     except Exception as e:
+        print("Error in list-webhook :-: ",e)
         return {"success":False,"error":str(e)}
 
 async def job_events(jobId:str):
