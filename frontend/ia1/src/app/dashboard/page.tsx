@@ -118,7 +118,7 @@ export default function Page() {
 
     const handleStartInterview = () => {
         console.log(" am i here")
-        router.push("/Interview")
+        router.push("/interview")
     }
 
     const handleSubmit = async (e: React.FormEvent) => {
