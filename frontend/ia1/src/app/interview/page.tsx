@@ -44,7 +44,7 @@ const Page: NextPage = () => {
   };
 
   // Initialize Speech Recognition
-  useEffect(() => {
+useEffect(() => {
     if (!isClient) return;
 
     if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
@@ -55,114 +55,154 @@ const Page: NextPage = () => {
     const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
     let recognition = new SpeechRecognitionClass();
 
-    let restarting = false
-    let stoppedByApp = false
-    let startedOnce = false
-    let restartTimer : number|null = null
+    let restarting = false;
+    let stoppedByApp = false;
+    let startedOnce = false;
+    let restartTimer:any = null;
+    
+    // Custom pause detection variables
+    let sessionFinal = '';
+    let lastSpeechTime = Date.now();
+    let pauseTimer :any= null;
+    let pendingText = ''; // Accumulates all text (both final and interim)
 
-    let sessionFinal = ''
+    const PAUSE_THRESHOLD = 5000; // 5 seconds
 
-    const startRecognition = ()=>{
-      try {
-        if(!recognition)return
-
-        recognition.continous = true
-        recognition.interimResults = true
-        recognition.lang = 'en-US'
-        recognition.maxAlternatives = 1
-        recognition.start()
-        setIsListening(true)
-        restarting = false
-      } catch (error) {
-        if(!restarting){
-          restarting = true
-          restartTimer = window.setTimeout(()=>{
-            restarting = false
-            startRecognition()
-          },5000)
+    const processFinalMessage = () => {
+        if (pendingText.trim()) {
+            console.log('Processing final message after 5s pause:', pendingText);
+            handleUserMessage(pendingText.trim());
+            
+            // Reset for next message
+            pendingText = '';
+            sessionFinal = '';
+            setTranscript('');
         }
-      }
-    }
-
-    recognition.onstart = ()=>{
-      startedOnce = true
-    }
-
-
-    // recognition.continuous = true;
-    // recognition.interimResults = true;
-    // recognition.lang = 'en-US';
-    // recognition.maxAlternatives = 1;
-
-    recognition.onresult = async (event: any) => {
-      let interimTranscript = '';
-      // let finalTranscript = '';
-
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const result = event.results[i];
-        if (result.isFinal) {
-          sessionFinal += result[0].transcript;
-        } else {
-          interimTranscript += result[0].transcript;
-        }
-      }
-
-      setTranscript((sessionFinal + interimTranscript).trim());
-
-      if(event.results[event.results.length-1]?.isFinal){
-        const newChunk = sessionFinal.trim()
-        handleUserMessage(newChunk)
-      }
-
-      // if (finalTranscript) {
-      //   handleUserMessage(finalTranscript.trim());
-      //   setTranscript('');
-      // }
     };
 
-    recognition.onerror = (event: any) => {
-      console.error('Speech recognition error:', event.error);
-      if(event.error === 'not-allowed' || event.error === 'service-not-allowed'){
-        stoppedByApp=true
-        setIsListening(false)
-        return
-      }
+    const resetPauseTimer = () => {
+        if (pauseTimer) {
+            clearTimeout(pauseTimer);
+        }
+        
+        pauseTimer = setTimeout(() => {
+            processFinalMessage();
+        }, PAUSE_THRESHOLD);
+    };
 
-      if(event.error === 'no-speech' && !startedOnce){
-        recognition.onresult = null as any
-        recognition.onerror = null as any
-        recognition.onend = null as any
-        recognition = new SpeechRecognitionClass()
-      }
+    const startRecognition = () => {
+        try {
+            if (!recognition) return;
+
+            recognition.continuous = true; // Fixed typo: was 'continous'
+            recognition.interimResults = true;
+            recognition.lang = 'en-US';
+            recognition.maxAlternatives = 1;
+            recognition.start();
+            setIsListening(true);
+            restarting = false;
+            
+            // Reset pause timer when starting
+            lastSpeechTime = Date.now();
+            resetPauseTimer();
+            
+        } catch (error) {
+            if (!restarting) {
+                restarting = true;
+                restartTimer = window.setTimeout(() => {
+                    restarting = false;
+                    startRecognition();
+                }, 5000);
+            }
+        }
+    };
+
+    recognition.onstart = () => {
+        startedOnce = true;
+    };
+
+    recognition.onresult = async (event:any) => {
+        let currentInterim = '';
+        let newFinalText = '';
+
+        // Update last speech time since we're getting results
+        lastSpeechTime = Date.now();
+        resetPauseTimer(); // Reset the 5-second countdown
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+            const result = event.results[i];
+            if (result.isFinal) {
+                newFinalText += result[0].transcript;
+            } else {
+                currentInterim += result[0].transcript;
+            }
+        }
+
+        // Add any new final text to our pending text
+        if (newFinalText) {
+            pendingText += newFinalText;
+            sessionFinal += newFinalText;
+        }
+
+        // Display current state: accumulated final + current interim
+        const displayText = (pendingText + currentInterim).trim();
+        setTranscript(displayText);
+
+        console.log('Pending text:', pendingText, 'Current interim:', currentInterim);
+    };
+
+    recognition.onerror = (event:any) => {
+        console.error('Speech recognition error:', event.error);
+        
+        if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+            stoppedByApp = true;
+            setIsListening(false);
+            if (pauseTimer) clearTimeout(pauseTimer);
+            return;
+        }
+
+        if (event.error === 'no-speech' && !startedOnce) {
+            recognition.onresult = null;
+            recognition.onerror = null;
+            recognition.onend = null;
+            recognition = new SpeechRecognitionClass();
+        }
     };
 
     recognition.onend = () => {
-      setIsListening(false);
-      if(stoppedByApp)return;
-      if(!restarting){
-        restarting=true
-        restartTimer = window.setTimeout(()=>{
-          restarting=false
-          startRecognition()
-        },5000)
-      }
+        setIsListening(false);
+        if (stoppedByApp) return;
+        
+        if (!restarting) {
+            restarting = true;
+            restartTimer = window.setTimeout(() => {
+                restarting = false;
+                startRecognition();
+            }, 1000); // Shorter restart delay since we have custom pause detection
+        }
     };
 
     recognitionRef.current = recognition;
-    stoppedByApp = false
-    startRecognition()
+    stoppedByApp = false;
+    startRecognition();
+
     return () => {
-      stoppedByApp=true
-      if(restartTimer)window.clearTimeout(restartTimer)
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.stop();
-        } catch  {
-          
+        stoppedByApp = true;
+        if (restartTimer) window.clearTimeout(restartTimer);
+        if (pauseTimer) clearTimeout(pauseTimer);
+        
+        // Process any remaining text before cleanup
+        if (pendingText.trim()) {
+            handleUserMessage(pendingText.trim());
         }
-      }
+        
+        if (recognitionRef.current) {
+            try {
+                recognitionRef.current.stop();
+            } catch {}
+        }
     };
-  }, [isClient]);
+}, [isClient]);
 
   const startConversation = () => {
     setConversationStarted(true);
