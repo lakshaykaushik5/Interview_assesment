@@ -18,10 +18,10 @@ export async function middleware(req:NextRequest){
         console.log(" --ip-- ",ip)
     }
 
-    if(req.nextUrl.pathname.startsWith("/dashboard") && !token){
-        const signInUrl = new URL("/api/auth/signin",req.url)
-        return NextResponse.redirect(signInUrl)
-    }
+    // if(req.nextUrl.pathname.startsWith("/dashboard") && !token){
+    //     const signInUrl = new URL("/api/auth/signin",req.url)
+    //     return NextResponse.redirect(signInUrl)
+    // }
 
     if(req.nextUrl.pathname === "/" && token){
         const dashboardUrl = new URL("/dashboard",req.url)
