@@ -53,48 +53,113 @@ const Page: NextPage = () => {
     }
 
     const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const recognition = new SpeechRecognitionClass();
+    let recognition = new SpeechRecognitionClass();
 
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = 'en-US';
-    recognition.maxAlternatives = 1;
+    let restarting = false
+    let stoppedByApp = false
+    let startedOnce = false
+    let restartTimer : number|null = null
+
+    let sessionFinal = ''
+
+    const startRecognition = ()=>{
+      try {
+        if(!recognition)return
+
+        recognition.continous = true
+        recognition.interimResults = true
+        recognition.lang = 'en-US'
+        recognition.maxAlternatives = 1
+        recognition.start()
+        setIsListening(true)
+        restarting = false
+      } catch (error) {
+        if(!restarting){
+          restarting = true
+          restartTimer = window.setTimeout(()=>{
+            restarting = false
+            startRecognition()
+          },5000)
+        }
+      }
+    }
+
+    recognition.onstart = ()=>{
+      startedOnce = true
+    }
+
+
+    // recognition.continuous = true;
+    // recognition.interimResults = true;
+    // recognition.lang = 'en-US';
+    // recognition.maxAlternatives = 1;
 
     recognition.onresult = async (event: any) => {
       let interimTranscript = '';
-      let finalTranscript = '';
+      // let finalTranscript = '';
 
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i];
         if (result.isFinal) {
-          finalTranscript += result[0].transcript;
+          sessionFinal += result[0].transcript;
         } else {
           interimTranscript += result[0].transcript;
         }
       }
 
-      setTranscript(finalTranscript || interimTranscript);
+      setTranscript((sessionFinal + interimTranscript).trim());
 
-      if (finalTranscript) {
-        handleUserMessage(finalTranscript.trim());
-        setTranscript('');
+      if(event.results[event.results.length-1]?.isFinal){
+        const newChunk = sessionFinal.trim()
+        handleUserMessage(newChunk)
       }
+
+      // if (finalTranscript) {
+      //   handleUserMessage(finalTranscript.trim());
+      //   setTranscript('');
+      // }
     };
 
     recognition.onerror = (event: any) => {
       console.error('Speech recognition error:', event.error);
-      setIsListening(false);
+      if(event.error === 'not-allowed' || event.error === 'service-not-allowed'){
+        stoppedByApp=true
+        setIsListening(false)
+        return
+      }
+
+      if(event.error === 'no-speech' && !startedOnce){
+        recognition.onresult = null as any
+        recognition.onerror = null as any
+        recognition.onend = null as any
+        recognition = new SpeechRecognitionClass()
+      }
     };
 
     recognition.onend = () => {
       setIsListening(false);
+      if(stoppedByApp)return;
+      if(!restarting){
+        restarting=true
+        restartTimer = window.setTimeout(()=>{
+          restarting=false
+          startRecognition()
+        },5000)
+      }
     };
 
     recognitionRef.current = recognition;
-
+    stoppedByApp = false
+    startRecognition()
     return () => {
+      stoppedByApp=true
+      if(restartTimer)window.clearTimeout(restartTimer)
       if (recognitionRef.current) {
-        recognitionRef.current.stop();
+        try {
+          recognitionRef.current.stop();
+        } catch  {
+          
+        }
       }
     };
   }, [isClient]);
@@ -125,7 +190,7 @@ const Page: NextPage = () => {
       const aiResponse = generateAIResponse(text);
       addMessage('ai', aiResponse);
       setIsProcessing(false);
-      
+
       // Optional: Speak the AI response
       speakText(aiResponse);
     }, 1000 + Math.random() * 2000);
@@ -144,17 +209,18 @@ const Page: NextPage = () => {
   };
 
   const speakText = (text: string) => {
+    return 
     if ('speechSynthesis' in window) {
       setIsAISpeaking(true);
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.rate = 0.8;
       utterance.pitch = 1;
       utterance.volume = 0.8;
-       
+
       utterance.onend = () => {
         setIsAISpeaking(false);
       };
-      
+
       window.speechSynthesis.speak(utterance);
     }
   };
@@ -274,11 +340,10 @@ const Page: NextPage = () => {
             className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
           >
             <div
-              className={`max-w-xs lg:max-w-md px-4 py-3 rounded-2xl ${
-                message.type === 'user'
+              className={`max-w-xs lg:max-w-md px-4 py-3 rounded-2xl ${message.type === 'user'
                   ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white'
                   : 'bg-white/10 backdrop-blur-sm border border-white/20 text-gray-100'
-              }`}
+                }`}
             >
               <p className="text-sm leading-relaxed">{message.text}</p>
               <p className="text-xs opacity-70 mt-1">
@@ -323,24 +388,26 @@ const Page: NextPage = () => {
             {(isListening || isAISpeaking) && (
               <div className="absolute inset-0">
                 <div
-                  className="h-12 w-12 rounded-full border opacity-75 animate-pulse-ring"
+                  className="h-12 w-12 flex items-center justify-center rounded-full border opacity-75 animate-pulse-ring"
                   style={{ borderColor: speakingColor, animationDuration: '1.5s' }}
                 ></div>
               </div>
             )}
-            <button
-              onClick={handleMicToggle}
-              disabled={isAISpeaking || isProcessing}
-              className="relative w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 transform hover:scale-105 disabled:opacity-50"
-              style={{
-                backgroundColor: speakingColor,
-                boxShadow: `0 4px 20px ${speakingColor}40`,
-                animation: isListening ? 'pulse-dot 1.5s infinite' : 'none',
-              }}
-              title={isListening ? 'Stop listening' : 'Start voice input'}
-            >
-              {isListening ? <MicOff size={20} /> : <Mic size={20} />}
-            </button>
+            <div className='w-full flex justify-center'>
+              <button
+                onClick={handleMicToggle}
+                disabled={isAISpeaking || isProcessing}
+                className="relative w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 transform hover:scale-105 disabled:opacity-50"
+                style={{
+                  backgroundColor: speakingColor,
+                  boxShadow: `0 4px 20px ${speakingColor}40`,
+                  animation: isListening ? 'pulse-dot 1.5s infinite' : 'none',
+                }}
+                title={isListening ? 'Stop listening' : 'Start voice input'}
+              >
+                {isListening ? <MicOff size={20} /> : <Mic size={20} />}
+              </button>
+            </div>
           </div>
 
           {/* Send button */}
