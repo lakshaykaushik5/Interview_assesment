@@ -1,476 +1,265 @@
-'use client';
+'use client'
 
-import React, { useState, useEffect, useRef } from 'react';
-import { Mic, MicOff, Send, Trash2, Volume2 } from 'lucide-react';
-import { NextPage } from 'next';
 
-// Global declarations
-declare global {
-  interface Window {
-    SpeechRecognition: any;
-    webkitSpeechRecognition: any;
-  }
-}
+import { useCallback, useRef, useState } from "react"
 
-interface Message {
-  id: string;
-  type: 'user' | 'ai';
+interface TranscriptMessage {
+  message_type: 'PartialTranscript' | 'FinalTranscript';
   text: string;
-  timestamp: Date;
+  words?: Array<{
+    text: string;
+    start: number;
+    end: number,
+    confidence: number;
+  }>;
 }
 
-const Page: NextPage = () => {
-  const [isListening, setIsListening] = useState(false);
-  const [isAISpeaking, setIsAISpeaking] = useState(false);
-  const [isClient, setIsClient] = useState(false);
-  const [transcript, setTranscript] = useState('');
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [conversationStarted, setConversationStarted] = useState(false);
 
-  const recognitionRef = useRef<any>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+export default function Page() {
+  const [isRecording, setIsRecording] = useState<Boolean>(false)
+  const [transcript, setTranscript] = useState<any>()
+  const [partialTranscript, setPartialTranscript] = useState('')
+  const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
+  const wsRef = useRef<WebSocket | null>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const streamRef = useRef<MediaStream | null>(null)
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
-  // Initialize Speech Recognition
-useEffect(() => {
-    if (!isClient) return;
-
-    if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
-      console.error('Speech Recognition API not supported in this browser');
-      return;
+  const getToken = async () => {
+    const response = await fetch('/api/assemblyai', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    })
+    if (!response.ok) {
+      throw new Error('Failed to get token')
     }
 
-    const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
-    let recognition = new SpeechRecognitionClass();
+    const { token } = await response.json()
+    alert(token + " here it is")
+    return token
+  }
 
-    let restarting = false;
-    let stoppedByApp = false;
-    let startedOnce = false;
-    let restartTimer:any = null;
-    
-    // Custom pause detection variables
-    let sessionFinal = '';
-    let lastSpeechTime = Date.now();
-    let pauseTimer :any= null;
-    let pendingText = ''; // Accumulates all text (both final and interim)
+  // const startRecording = useCallback(async () => {
+  //   try {
+  //     setError(null)
 
-    const PAUSE_THRESHOLD = 5000; // 5 seconds
+  //     const token = await getToken()
+  //     //connecting to websocket
 
-    const processFinalMessage = () => {
-        if (pendingText.trim()) {
-            console.log('Processing final message after 5s pause:', pendingText);
-            handleUserMessage(pendingText.trim());
-            
-            // Reset for next message
-            pendingText = '';
-            sessionFinal = '';
-            setTranscript('');
-        }
-    };
 
-    const resetPauseTimer = () => {
-        if (pauseTimer) {
-            clearTimeout(pauseTimer);
-        }
-        
-        pauseTimer = setTimeout(() => {
-            processFinalMessage();
-        }, PAUSE_THRESHOLD);
-    };
+  //     const wsUrl = `wss://streaming.assemblyai.com/v3/ws?sample_rate=16000&formatted_finals=true&token=${token}`;
+  //     const ws = new WebSocket(wsUrl);
+  //     wsRef.current = ws
 
-    const startRecognition = () => {
-        try {
-            if (!recognition) return;
+  //     ws.onopen = () => {
+  //       console.log('WebSocket Connected')
+  //       setIsRecording(true)
+  //     }
 
-            recognition.continuous = true; // Fixed typo: was 'continous'
-            recognition.interimResults = true;
-            recognition.lang = 'en-US';
-            recognition.maxAlternatives = 1;
-            recognition.start();
-            setIsListening(true);
-            restarting = false;
-            
-            // Reset pause timer when starting
-            lastSpeechTime = Date.now();
-            resetPauseTimer();
-            
-        } catch (error) {
-            if (!restarting) {
-                restarting = true;
-                restartTimer = window.setTimeout(() => {
-                    restarting = false;
-                    startRecognition();
-                }, 5000);
-            }
-        }
-    };
+  //     ws.onmessage = (event: any) => {
+  //       const message: TranscriptMessage = JSON.parse(event.data)
+  //       if (message.message_type === 'PartialTranscript') {
+  //         setPartialTranscript(message.text)
+  //       } else if (message.message_type === 'FinalTranscript') {
+  //         setTranscript((prev: any) => prev + ' ' + message.text)
+  //         setPartialTranscript('')
+  //       }
+  //     }
 
-    recognition.onstart = () => {
-        startedOnce = true;
-    };
+  //     ws.onerror = (error) => {
+  //       console.error('WebSocket error :', error)
+  //     }
 
-    recognition.onresult = async (event:any) => {
-        let currentInterim = '';
-        let newFinalText = '';
+  //     ws.onclose = () => {
+  //       console.log('WebSocket Closed')
+  //       setIsRecording(false)
+  //     }
 
-        // Update last speech time since we're getting results
-        lastSpeechTime = Date.now();
-        resetPauseTimer(); // Reset the 5-second countdown
+  //     const stream = await navigator.mediaDevices.getUserMedia({
+  //       audio: {
+  //         sampleRate: 1600,
+  //         channelCount: 1,
+  //         echoCancellation: true,
+  //         noiseSuppression: true,
+  //       }
+  //     })
 
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-            const result = event.results[i];
-            if (result.isFinal) {
-                newFinalText += result[0].transcript;
-            } else {
-                currentInterim += result[0].transcript;
-            }
-        }
+  //     streamRef.current = stream
 
-        // Add any new final text to our pending text
-        if (newFinalText) {
-            pendingText += newFinalText;
-            sessionFinal += newFinalText;
-        }
+  //     const mediaRecorder = new MediaRecorder(stream, {
+  //       mimeType: 'audio/webm'
+  //     })
 
-        // Display current state: accumulated final + current interim
-        const displayText = (pendingText + currentInterim).trim();
-        setTranscript(displayText);
+  //     mediaRecorderRef.current = mediaRecorder
 
-        console.log('Pending text:', pendingText, 'Current interim:', currentInterim);
-    };
+  //     mediaRecorder.ondataavailable = (event) => {
+  //       if (event.data.size > 0 && ws.readyState === WebSocket.OPEN) {
+  //         const reader = new FileReader()
+  //         reader.onloadend = () => {
+  //           const base64Audio = (reader.result as string).split(',')[1]
+  //           ws.send(JSON.stringify({
+  //             audio_data: base64Audio
+  //           }))
+  //         }
+  //         reader.readAsDataURL(event.data)
+  //       }
+  //     }
 
-    recognition.onerror = (event:any) => {
-        console.error('Speech recognition error:', event.error);
-        
-        if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-            stoppedByApp = true;
-            setIsListening(false);
-            if (pauseTimer) clearTimeout(pauseTimer);
-            return;
-        }
 
-        if (event.error === 'no-speech' && !startedOnce) {
-            recognition.onresult = null;
-            recognition.onerror = null;
-            recognition.onend = null;
-            recognition = new SpeechRecognitionClass();
-        }
-    };
+  //     mediaRecorder.start(100)
 
-    recognition.onend = () => {
-        setIsListening(false);
-        if (stoppedByApp) return;
-        
-        if (!restarting) {
-            restarting = true;
-            restartTimer = window.setTimeout(() => {
-                restarting = false;
-                startRecognition();
-            }, 1000); // Shorter restart delay since we have custom pause detection
-        }
-    };
 
-    recognitionRef.current = recognition;
-    stoppedByApp = false;
-    startRecognition();
 
-    return () => {
-        stoppedByApp = true;
-        if (restartTimer) window.clearTimeout(restartTimer);
-        if (pauseTimer) clearTimeout(pauseTimer);
-        
-        // Process any remaining text before cleanup
-        if (pendingText.trim()) {
-            handleUserMessage(pendingText.trim());
-        }
-        
-        if (recognitionRef.current) {
-            try {
-                recognitionRef.current.stop();
-            } catch {}
-        }
-    };
-}, [isClient]);
+  //   } catch (error) {
+  //     console.error('Error starting recording: ', error)
+  //     setError('Failed to start recording. Please check microphone permission. ')
+  //   }
+  // }, [])
 
-  const startConversation = () => {
-    setConversationStarted(true);
-    addMessage('ai', "Hello! I'm your AI assistant. How can I help you today?");
-  };
 
-  const addMessage = (type: 'user' | 'ai', text: string) => {
-    const newMessage: Message = {
-      id: Date.now().toString(),
-      type,
-      text,
-      timestamp: new Date(),
-    };
-    setMessages(prev => [...prev, newMessage]);
-  };
+  const startRecording = useCallback(async () => {
+    try {
+      setError(null);
 
-  const handleUserMessage = async (text: string) => {
-    if (!text.trim()) return;
+      // 1. Get temporary token from your backend
+      const token = await getToken();
 
-    addMessage('user', text);
-    setIsProcessing(true);
+      // 2. Ask for mic permission first
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: true
+      });
+      streamRef.current = stream;
 
-    // Simulate AI processing delay
-    setTimeout(() => {
-      const aiResponse = generateAIResponse(text);
-      addMessage('ai', aiResponse);
-      setIsProcessing(false);
+      // 3. Connect to AssemblyAI WebSocket
+      const wsUrl = `wss://streaming.assemblyai.com/v3/ws?sample_rate=16000&token=${token}`;
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
 
-      // Optional: Speak the AI response
-      speakText(aiResponse);
-    }, 1000 + Math.random() * 2000);
-  };
+      ws.onopen = () => {
+        console.log("✅ WebSocket Connected");
+        setIsRecording(true);
 
-  const generateAIResponse = (userMessage: string): string => {
-    // Simple AI response simulation - replace with actual AI API call
-    const responses = [
-      "That's an interesting point. Can you tell me more about that?",
-      "I understand what you're saying. Let me think about this for a moment.",
-      "Thank you for sharing that with me. What would you like to explore next?",
-      "That's a great question! Here's what I think about it...",
-      "I see where you're coming from. Let's dive deeper into this topic.",
-    ];
-    return responses[Math.floor(Math.random() * responses.length)];
-  };
+        // 4. Start MediaRecorder only after WS is ready
+        const mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+        mediaRecorderRef.current = mediaRecorder;
 
-  const speakText = (text: string) => {
-    return 
-    if ('speechSynthesis' in window) {
-      setIsAISpeaking(true);
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 0.8;
-      utterance.pitch = 1;
-      utterance.volume = 0.8;
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0 && ws.readyState === WebSocket.OPEN) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              const base64Audio = (reader.result as string).split(",")[1];
+              ws.send(JSON.stringify({ audio_data: base64Audio }));
+            };
+            reader.readAsDataURL(event.data);
+          }
+        };
 
-      utterance.onend = () => {
-        setIsAISpeaking(false);
+        mediaRecorder.start(250); // send every 250ms
       };
 
-      window.speechSynthesis.speak(utterance);
+      ws.onmessage = (event) => {
+        const msg: TranscriptMessage = JSON.parse(event.data);
+        if (msg.message_type === "PartialTranscript") {
+          setPartialTranscript(msg.text);
+        } else if (msg.message_type === "FinalTranscript") {
+          setTranscript((prev: any) => (prev ? prev + " " : "") + msg.text);
+          setPartialTranscript("");
+        }
+      };
+
+      ws.onerror = (err) => {
+        console.error("WebSocket error:", err);
+      };
+
+      ws.onclose = () => {
+        console.log("❌ WebSocket closed");
+        setIsRecording(false);
+      };
+
+    } catch (err) {
+      console.error("Error starting recording:", err);
+      setError("Failed to start recording. Please check microphone permission.");
     }
-  };
+  }, []);
 
-  const startListening = () => {
-    if (recognitionRef.current && !isListening) {
-      setIsListening(true);
-      recognitionRef.current.start();
+
+  const stopRecording = useCallback(() => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop()  // ✅ Correct!
     }
-  };
 
-  const stopListening = () => {
-    if (recognitionRef.current && isListening) {
-      recognitionRef.current.stop();
-      setIsListening(false);
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop())
     }
-  };
 
-  const handleMicToggle = () => {
-    if (isListening) {
-      stopListening();
-    } else {
-      startListening();
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.close()
     }
-  };
 
-  const clearConversation = () => {
-    setMessages([]);
-    setConversationStarted(false);
-    setTranscript('');
-  };
+    setIsRecording(false)
+    setPartialTranscript('')
+  }, [])
 
-  const handleSendMessage = () => {
-    if (transcript.trim()) {
-      handleUserMessage(transcript.trim());
-      setTranscript('');
-    }
-  };
 
-  if (!isClient) {
-    return <div className="bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900 min-h-screen"></div>;
+  // const stopRecording = useCallback(() => {
+  //   if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'inactive') {
+  //     mediaRecorderRef.current.stop()
+  //   }
+
+  //   if (streamRef.current) {
+  //     streamRef.current.getTracks().forEach(track => track.stop())
+  //   }
+
+  //   if (wsRef.current) {
+  //     wsRef.current.close()
+  //   }
+
+  //   setIsRecording(false)
+  //   setPartialTranscript('')
+  // }, [])
+
+
+  const clearTranscripts = () => {
+    setTranscript('')
+    setPartialTranscript('')
   }
-
-  if (!conversationStarted) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900 text-white flex flex-col items-center justify-center p-6">
-        <style jsx>{`
-          @keyframes float {
-            0%, 100% { transform: translateY(0px); }
-            50% { transform: translateY(-20px); }
-          }
-          @keyframes glow {
-            0%, 100% { box-shadow: 0 0 20px rgba(59, 130, 246, 0.5); }
-            50% { box-shadow: 0 0 40px rgba(59, 130, 246, 0.8); }
-          }
-        `}</style>
-
-        <div className="text-center mb-12 animate-float">
-          <h1 className="text-6xl font-bold mb-4 bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-            AI Companion
-          </h1>
-          <p className="text-xl text-gray-300 mb-8">
-            Your intelligent conversation partner
-          </p>
-        </div>
-
-        <button
-          onClick={startConversation}
-          className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-semibold py-4 px-12 rounded-full text-xl transition-all duration-300 transform hover:scale-105 animate-glow"
-        >
-          Start Conversation
-        </button>
-
-        <div className="absolute bottom-6 text-sm text-gray-400">
-          Click to begin your AI conversation experience
-        </div>
-      </div>
-    );
-  }
-
-  const speakingColor = isListening ? '#10b981' : isAISpeaking ? '#3b82f6' : '#6b7280';
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900 text-white flex flex-col">
-      <style jsx>{`
-        @keyframes pulse-ring {
-          0% { transform: scale(0.33); }
-          40%, 50% { opacity: 1; }
-          100% { opacity: 0; transform: scale(1.33); }
-        }
-        @keyframes pulse-dot {
-          0% { transform: scale(0.8); }
-          50% { transform: scale(1); }
-          100% { transform: scale(0.8); }
-        }
-      `}</style>
-
-      {/* Header */}
-      <div className="bg-black/20 backdrop-blur-sm border-b border-white/10 p-4 flex justify-between items-center">
-        <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-          AI Conversation
-        </h1>
-        <button
-          onClick={clearConversation}
-          className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-          title="Clear conversation"
-        >
-          <Trash2 size={20} />
-        </button>
+    <div className="max-w-4xl max-auto p-6">
+      <h1 className="text-3xl font-bold mb-6">
+        Live Speech-to-text
+      </h1>
+      <div className="mb-6">
+        <button onClick={isRecording ? stopRecording : startRecording} className={`px-6 py-3 rounded-lg font-semibold ${isRecording ? 'bg-red-500 hover:bg-red-600 text-white' : 'bg-blue-500 hover bg-blue-600 text-white'
+          }`}>{isRecording ? 'Stop Recording' : 'Start Recording'}</button>
+        <button onClick={clearTranscripts} className="ml-4 px-6 py-3 rounded-lg font-semibold bg-gray-500 hover:bg-gray-600 text-white">Clear</button>
       </div>
+      {error && (
+        <div className="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded">
+          {error}
+        </div>
+      )}
 
-      {/* Messages Container */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
-          >
-            <div
-              className={`max-w-xs lg:max-w-md px-4 py-3 rounded-2xl ${message.type === 'user'
-                  ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white'
-                  : 'bg-white/10 backdrop-blur-sm border border-white/20 text-gray-100'
-                }`}
-            >
-              <p className="text-sm leading-relaxed">{message.text}</p>
-              <p className="text-xs opacity-70 mt-1">
-                {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </p>
-            </div>
-          </div>
-        ))}
-
-        {isProcessing && (
-          <div className="flex justify-start">
-            <div className="bg-white/10 backdrop-blur-sm border border-white/20 text-gray-100 max-w-xs lg:max-w-md px-4 py-3 rounded-2xl">
-              <div className="flex items-center space-x-2">
-                <div className="flex space-x-1">
-                  <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"></div>
-                  <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                  <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                </div>
-                <span className="text-sm text-gray-300">AI is thinking...</span>
-              </div>
-            </div>
+      <div className="border rounded-lg p-4 min-h-32">
+        <div className="text-gray-800">
+          {transcript}
+          {partialTranscript && (
+            <span className="text-gray-500 italic"> {partialTranscript} </span>
+          )}
+        </div>
+        {!transcript && !partialTranscript && (
+          <div className="text-gray-400"> Click "Start Recording" to begin </div>
+        )}
+        {isRecording && (
+          <div className="mt-4 flex items-center text-red-500">
+            <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse mr-2"></div>
+            Recording . . . .
           </div>
         )}
-
-        <div ref={messagesEndRef} />
-      </div>
-
-      {/* Input Area */}
-      <div className="bg-black/20 backdrop-blur-sm border-t border-white/10 p-4">
-        {/* Current transcript display */}
-        {transcript && (
-          <div className="mb-3 p-3 bg-white/10 rounded-lg border border-white/20">
-            <p className="text-sm text-gray-300">
-              <span className="text-blue-400">Speaking:</span> {transcript}
-            </p>
-          </div>
-        )}
-
-        <div className="flex items-center space-x-4">
-          {/* Voice input button */}
-          <div className="relative">
-            {(isListening || isAISpeaking) && (
-              <div className="absolute inset-0">
-                <div
-                  className="h-12 w-12 flex items-center justify-center rounded-full border opacity-75 animate-pulse-ring"
-                  style={{ borderColor: speakingColor, animationDuration: '1.5s' }}
-                ></div>
-              </div>
-            )}
-            <div className='w-full flex justify-center'>
-              <button
-                onClick={handleMicToggle}
-                disabled={isAISpeaking || isProcessing}
-                className="relative w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 transform hover:scale-105 disabled:opacity-50"
-                style={{
-                  backgroundColor: speakingColor,
-                  boxShadow: `0 4px 20px ${speakingColor}40`,
-                  animation: isListening ? 'pulse-dot 1.5s infinite' : 'none',
-                }}
-                title={isListening ? 'Stop listening' : 'Start voice input'}
-              >
-                {isListening ? <MicOff size={20} /> : <Mic size={20} />}
-              </button>
-            </div>
-          </div>
-
-          {/* Send button */}
-
-        </div>
-
-        {/* Status indicator */}
-        <div className="mt-3 text-center">
-          <p className="text-xs text-gray-400">
-            {isListening ? (
-              <span className="text-green-400">🎤 Listening...</span>
-            ) : isAISpeaking ? (
-              <span className="text-blue-400">🔊 AI Speaking...</span>
-            ) : isProcessing ? (
-              <span className="text-yellow-400">⏳ Processing...</span>
-            ) : (
-              'Click mic to speak or type your message'
-            )}
-          </p>
-        </div>
       </div>
     </div>
-  );
-};
+  )
 
-export default Page;
+}
