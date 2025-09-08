@@ -1,265 +1,342 @@
-'use client'
+// app/stream/page.tsx
+"use client";
 
+import React, { useCallback, useRef, useState } from "react";
 
-import { useCallback, useRef, useState } from "react"
+type TranscriptMessage = {
+  type?: "Begin" | "Turn" | "Termination" | string;
+  id?: string;
+  transcript?: string;
+  turn_is_formatted?: boolean;
+  // other fields possible depending on AssemblyAI response
+};
 
-interface TranscriptMessage {
-  message_type: 'PartialTranscript' | 'FinalTranscript';
-  text: string;
-  words?: Array<{
-    text: string;
-    start: number;
-    end: number,
-    confidence: number;
-  }>;
-}
+export default function StreamPage() {
+  const [isRecording, setIsRecording] = useState(false);
+  const [partial, setPartial] = useState("");
+  const [finalText, setFinalText] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [debug, setDebug] = useState<string>("");
 
+  const wsRef = useRef<WebSocket | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const processorRef = useRef<ScriptProcessorNode | null>(null);
+  const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const tokenTimerRef = useRef<number | null>(null);
 
-export default function Page() {
-  const [isRecording, setIsRecording] = useState<Boolean>(false)
-  const [transcript, setTranscript] = useState<any>()
-  const [partialTranscript, setPartialTranscript] = useState('')
-  const [error, setError] = useState<string | null>(null)
-
-  const wsRef = useRef<WebSocket | null>(null)
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
-  const streamRef = useRef<MediaStream | null>(null)
-
-  const getToken = async () => {
-    const response = await fetch('/api/assemblyai', {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json'
+  // helper: downsample Float32Array to 16kHz
+  function downsampleBuffer(buffer: Float32Array, inputSampleRate: number, outSampleRate = 16000) {
+    if (outSampleRate === inputSampleRate) return buffer;
+    const sampleRateRatio = inputSampleRate / outSampleRate;
+    const newLength = Math.round(buffer.length / sampleRateRatio);
+    const result = new Float32Array(newLength);
+    let offsetResult = 0;
+    let offsetBuffer = 0;
+    while (offsetResult < newLength) {
+      const nextOffsetBuffer = Math.round((offsetResult + 1) * sampleRateRatio);
+      let accum = 0, count = 0;
+      for (let i = offsetBuffer; i < nextOffsetBuffer && i < buffer.length; i++) {
+        accum += buffer[i];
+        count++;
       }
-    })
-    if (!response.ok) {
-      throw new Error('Failed to get token')
+      result[offsetResult] = count ? accum / count : 0;
+      offsetResult++;
+      offsetBuffer = nextOffsetBuffer;
     }
-
-    const { token } = await response.json()
-    alert(token + " here it is")
-    return token
+    return result;
   }
 
-  // const startRecording = useCallback(async () => {
-  //   try {
-  //     setError(null)
+  // helper: convert Float32Array -> PCM16 ArrayBuffer
+  function floatTo16BitPCM(float32Array: Float32Array) {
+    const buffer = new ArrayBuffer(float32Array.length * 2);
+    const view = new DataView(buffer);
+    let offset = 0;
+    for (let i = 0; i < float32Array.length; i++, offset += 2) {
+      let s = Math.max(-1, Math.min(1, float32Array[i]));
+      view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true); // little endian
+    }
+    return buffer;
+  }
 
-  //     const token = await getToken()
-  //     //connecting to websocket
-
-
-  //     const wsUrl = `wss://streaming.assemblyai.com/v3/ws?sample_rate=16000&formatted_finals=true&token=${token}`;
-  //     const ws = new WebSocket(wsUrl);
-  //     wsRef.current = ws
-
-  //     ws.onopen = () => {
-  //       console.log('WebSocket Connected')
-  //       setIsRecording(true)
-  //     }
-
-  //     ws.onmessage = (event: any) => {
-  //       const message: TranscriptMessage = JSON.parse(event.data)
-  //       if (message.message_type === 'PartialTranscript') {
-  //         setPartialTranscript(message.text)
-  //       } else if (message.message_type === 'FinalTranscript') {
-  //         setTranscript((prev: any) => prev + ' ' + message.text)
-  //         setPartialTranscript('')
-  //       }
-  //     }
-
-  //     ws.onerror = (error) => {
-  //       console.error('WebSocket error :', error)
-  //     }
-
-  //     ws.onclose = () => {
-  //       console.log('WebSocket Closed')
-  //       setIsRecording(false)
-  //     }
-
-  //     const stream = await navigator.mediaDevices.getUserMedia({
-  //       audio: {
-  //         sampleRate: 1600,
-  //         channelCount: 1,
-  //         echoCancellation: true,
-  //         noiseSuppression: true,
-  //       }
-  //     })
-
-  //     streamRef.current = stream
-
-  //     const mediaRecorder = new MediaRecorder(stream, {
-  //       mimeType: 'audio/webm'
-  //     })
-
-  //     mediaRecorderRef.current = mediaRecorder
-
-  //     mediaRecorder.ondataavailable = (event) => {
-  //       if (event.data.size > 0 && ws.readyState === WebSocket.OPEN) {
-  //         const reader = new FileReader()
-  //         reader.onloadend = () => {
-  //           const base64Audio = (reader.result as string).split(',')[1]
-  //           ws.send(JSON.stringify({
-  //             audio_data: base64Audio
-  //           }))
-  //         }
-  //         reader.readAsDataURL(event.data)
-  //       }
-  //     }
-
-
-  //     mediaRecorder.start(100)
-
-
-
-  //   } catch (error) {
-  //     console.error('Error starting recording: ', error)
-  //     setError('Failed to start recording. Please check microphone permission. ')
-  //   }
-  // }, [])
-
+  // get temporary streaming token from our backend
+  const getToken = useCallback(async () => {
+    const res = await fetch("/api/assemblyai");
+    if (!res.ok) {
+      const txt = await res.text();
+      throw new Error("Failed to get token: " + txt);
+    }
+    const data = await res.json();
+    return data.token as string;
+  }, []);
 
   const startRecording = useCallback(async () => {
+    setError(null);
+    setDebug("");
     try {
-      setError(null);
+      // basic support check
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setError("getUserMedia not supported in this browser");
+        return;
+      }
 
-      // 1. Get temporary token from your backend
-      const token = await getToken();
-
-      // 2. Ask for mic permission first
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: true
-      });
+      // 1) request microphone
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
 
-      // 3. Connect to AssemblyAI WebSocket
-      const wsUrl = `wss://streaming.assemblyai.com/v3/ws?sample_rate=16000&token=${token}`;
+      // 2) get token
+      const token = await getToken();
+
+      // 3) open websocket to AssemblyAI (v3) with encoding parameter
+      const wsUrl = `wss://streaming.assemblyai.com/v3/ws?sample_rate=16000&encoding=pcm_s16le&token=${token}`;
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
-
+      
       ws.onopen = () => {
-        console.log("✅ WebSocket Connected");
-        setIsRecording(true);
-
-        // 4. Start MediaRecorder only after WS is ready
-        const mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
-        mediaRecorderRef.current = mediaRecorder;
-
-        mediaRecorder.ondataavailable = (event) => {
-          if (event.data.size > 0 && ws.readyState === WebSocket.OPEN) {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-              const base64Audio = (reader.result as string).split(",")[1];
-              ws.send(JSON.stringify({ audio_data: base64Audio }));
-            };
-            reader.readAsDataURL(event.data);
-          }
-        };
-
-        mediaRecorder.start(250); // send every 250ms
+        console.log('WS open');
+        setDebug((d) => d + "WebSocket connected\n");
+        // No need to send SessionBegins for v3 - session starts automatically
       };
 
-      ws.onmessage = (event) => {
-        const msg: TranscriptMessage = JSON.parse(event.data);
-        if (msg.message_type === "PartialTranscript") {
-          setPartialTranscript(msg.text);
-        } else if (msg.message_type === "FinalTranscript") {
-          setTranscript((prev: any) => (prev ? prev + " " : "") + msg.text);
-          setPartialTranscript("");
+      ws.onmessage = (evt) => {
+        try {
+          const msg: TranscriptMessage = JSON.parse(evt.data);
+          
+          switch (msg.type) {
+            case "Begin":
+              console.log('Session started:', msg.id);
+              setDebug((d) => d + `Session started: ${msg.id}\n`);
+              setIsRecording(true);
+              break;
+              
+            case "Turn":
+              if (msg.turn_is_formatted) {
+                // Final transcript
+                setFinalText((prev) => (prev ? prev + " " : "") + (msg.transcript || ""));
+                setPartial("");
+                setDebug((d) => d + "Final: " + (msg.transcript || "") + "\n");
+              } else {
+                // Partial transcript
+                setPartial(msg.transcript || "");
+              }
+              break;
+              
+            case "Termination":
+              console.log('Session terminated');
+              setDebug((d) => d + "Session terminated\n");
+              setIsRecording(false);
+              break;
+              
+            default:
+              console.log("Unknown message type:", msg.type);
+              setDebug((d) => d + `Unknown message: ${msg.type}\n`);
+          }
+        } catch (e) {
+          console.warn("Failed to parse ws message", e, evt.data);
+          setDebug((d) => d + "Failed to parse message\n");
         }
       };
 
       ws.onerror = (err) => {
-        console.error("WebSocket error:", err);
+        console.error("WS error", err);
+        setDebug((d) => d + "WS error\n");
       };
 
-      ws.onclose = () => {
-        console.log("❌ WebSocket closed");
+      ws.onclose = (ev) => {
+        console.log("WS closed", ev);
+        setDebug((d) => d + `WS closed: code=${ev.code} reason=${ev.reason}\n`);
         setIsRecording(false);
       };
 
+      // 4) start WebAudio capture & processor
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      audioContextRef.current = audioContext;
+
+      // some browsers require a user gesture to resume context; we are in a click handler so OK
+      if (audioContext.state === "suspended") {
+        await audioContext.resume();
+      }
+
+      const source = audioContext.createMediaStreamSource(stream);
+      sourceRef.current = source;
+
+      // Create script processor (bufferSize 4096). Note: AudioWorklet is better but this is simpler.
+      const bufferSize = 4096;
+      const processor = audioContext.createScriptProcessor(bufferSize, 1, 1);
+      processorRef.current = processor;
+
+      // create a gain node to avoid audible output (connect processor->gain(0)->destination)
+      const silentGain = audioContext.createGain();
+      silentGain.gain.value = 0;
+
+      processor.onaudioprocess = (e) => {
+        try {
+          const inputData = e.inputBuffer.getChannelData(0); // Float32Array
+          // downsample to 16000
+          const downsampled = downsampleBuffer(inputData, audioContext.sampleRate, 16000);
+          // convert to 16-bit PCM
+          const pcm16 = floatTo16BitPCM(downsampled);
+          
+          // send raw PCM data as binary WebSocket message (not JSON)
+          if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            wsRef.current.send(pcm16);
+          }
+        } catch (err) {
+          console.error("Audio processing error", err);
+        }
+      };
+
+      // connect nodes
+      source.connect(processor);
+      processor.connect(silentGain);
+      silentGain.connect(audioContext.destination);
+
+      // optional: token refresh if you expect long sessions (token expiry). We'll set a timer to refresh token ~50 minutes for 1h token
+      if (tokenTimerRef.current) {
+        window.clearTimeout(tokenTimerRef.current);
+        tokenTimerRef.current = null;
+      }
+      // refresh after 50 minutes (if using 3600s expiry)
+      tokenTimerRef.current = window.setTimeout(async () => {
+        try {
+          setDebug((d) => d + "Refreshing token...\n");
+          const newToken = await getToken();
+          // Not all servers support "auth update" over opened ws. If required, close and reopen.
+          console.log("new token", newToken);
+        } catch (e) {
+          console.warn("token refresh failed", e);
+        }
+      }, 50 * 60 * 1000);
+
+      setDebug((d) => d + "Recording started\n");
+    } catch (err: any) {
+      console.error("startRecording error", err);
+      setError(err?.message || String(err));
+      setIsRecording(false);
+    }
+  }, [getToken]);
+
+  const stopRecording = useCallback(() => {
+    try {
+      setDebug((d) => d + "Stopping...\n");
+
+      // stop processor
+      if (processorRef.current) {
+        try {
+          processorRef.current.disconnect();
+        } catch { }
+        processorRef.current.onaudioprocess = null;
+        processorRef.current = null;
+      }
+
+      // stop source
+      if (sourceRef.current) {
+        try {
+          sourceRef.current.disconnect();
+        } catch { }
+        sourceRef.current = null;
+      }
+
+      // close audio context
+      if (audioContextRef.current) {
+        try {
+          audioContextRef.current.close();
+        } catch { }
+        audioContextRef.current = null;
+      }
+
+      // stop tracks
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+      }
+
+      // send session termination and close socket
+      if (wsRef.current) {
+        try {
+          if (wsRef.current.readyState === WebSocket.OPEN) {
+            // Send proper termination message for v3
+            wsRef.current.send(JSON.stringify({ type: "Terminate" }));
+          }
+        } catch (e) {
+          console.warn("error sending termination", e);
+        }
+        try {
+          wsRef.current.close();
+        } catch { }
+        wsRef.current = null;
+      }
+
+      if (tokenTimerRef.current) {
+        window.clearTimeout(tokenTimerRef.current);
+        tokenTimerRef.current = null;
+      }
+
+      setIsRecording(false);
+      setDebug((d) => d + "Stopped\n");
     } catch (err) {
-      console.error("Error starting recording:", err);
-      setError("Failed to start recording. Please check microphone permission.");
+      console.error("stopRecording error", err);
+      setError("Error stopping recording");
     }
   }, []);
 
-
-  const stopRecording = useCallback(() => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      mediaRecorderRef.current.stop()  // ✅ Correct!
-    }
-
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop())
-    }
-
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.close()
-    }
-
-    setIsRecording(false)
-    setPartialTranscript('')
-  }, [])
-
-
-  // const stopRecording = useCallback(() => {
-  //   if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'inactive') {
-  //     mediaRecorderRef.current.stop()
-  //   }
-
-  //   if (streamRef.current) {
-  //     streamRef.current.getTracks().forEach(track => track.stop())
-  //   }
-
-  //   if (wsRef.current) {
-  //     wsRef.current.close()
-  //   }
-
-  //   setIsRecording(false)
-  //   setPartialTranscript('')
-  // }, [])
-
-
-  const clearTranscripts = () => {
-    setTranscript('')
-    setPartialTranscript('')
-  }
-
   return (
-    <div className="max-w-4xl max-auto p-6">
-      <h1 className="text-3xl font-bold mb-6">
-        Live Speech-to-text
-      </h1>
-      <div className="mb-6">
-        <button onClick={isRecording ? stopRecording : startRecording} className={`px-6 py-3 rounded-lg font-semibold ${isRecording ? 'bg-red-500 hover:bg-red-600 text-white' : 'bg-blue-500 hover bg-blue-600 text-white'
-          }`}>{isRecording ? 'Stop Recording' : 'Start Recording'}</button>
-        <button onClick={clearTranscripts} className="ml-4 px-6 py-3 rounded-lg font-semibold bg-gray-500 hover:bg-gray-600 text-white">Clear</button>
+    <div style={{ maxWidth: 800, margin: "0 auto", padding: 20 }}>
+      <h2>AssemblyAI Realtime — Universal Streaming v3 (PCM16 16kHz)</h2>
+
+      <div style={{ marginBottom: 12 }}>
+        <button
+          onClick={isRecording ? stopRecording : startRecording}
+          style={{
+            padding: "8px 16px",
+            background: isRecording ? "#ef4444" : "#2563eb",
+            color: "white",
+            border: "none",
+            borderRadius: 6,
+            cursor: "pointer",
+            marginRight: 10,
+          }}
+        >
+          {isRecording ? "Stop" : "Start"}
+        </button>
+
+        <button
+          onClick={() => {
+            setFinalText("");
+            setPartial("");
+            setError(null);
+            setDebug("");
+          }}
+          style={{
+            padding: "8px 12px",
+            background: "#6b7280",
+            color: "white",
+            border: "none",
+            borderRadius: 6,
+            cursor: "pointer",
+          }}
+        >
+          Clear
+        </button>
       </div>
+
       {error && (
-        <div className="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded">
-          {error}
+        <div style={{ padding: 8, background: "#fee2e2", color: "#991b1b", borderRadius: 6 }}>
+          Error: {error}
         </div>
       )}
 
-      <div className="border rounded-lg p-4 min-h-32">
-        <div className="text-gray-800">
-          {transcript}
-          {partialTranscript && (
-            <span className="text-gray-500 italic"> {partialTranscript} </span>
-          )}
-        </div>
-        {!transcript && !partialTranscript && (
-          <div className="text-gray-400"> Click "Start Recording" to begin </div>
-        )}
-        {isRecording && (
-          <div className="mt-4 flex items-center text-red-500">
-            <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse mr-2"></div>
-            Recording . . . .
-          </div>
-        )}
+      <div style={{ minHeight: 100, border: "1px solid #e5e7eb", padding: 12, borderRadius: 6 }}>
+        <div style={{ fontSize: 14, color: "#111827" }}>{finalText}</div>
+        {partial && <div style={{ fontStyle: "italic", color: "#6b7280" }}>{partial}</div>}
+        {!finalText && !partial && <div style={{ color: "#9ca3af" }}>No transcript yet.</div>}
       </div>
-    </div>
-  )
 
+      <pre style={{ marginTop: 12, whiteSpace: "pre-wrap", background: "#f8fafc", padding: 8, borderRadius: 6 }}>
+        <strong>Debug:</strong>
+        {"\n"}
+        {debug}
+      </pre>
+    </div>
+  );
 }
