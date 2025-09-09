@@ -6,6 +6,7 @@ from prompts import interview_plan_node_system_prompt,main_question_generator_an
 
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, ToolMessage
+from langgraph.graph import StateGraph,START,END
 
 from memory import memory_retrieval, memory_resume_sync, memory_conversation_sync
 
@@ -84,5 +85,24 @@ def conditional_edge(state:InterviewState):
         
         return "continue"
     
+
+
+graph = StateGraph(InterviewState)
+
+graph.add_node("interview_plan_node",interview_plan_node)
+graph.add_node("main_interview_node",main_interview_node)
+
+graph.add_edge(START,'interview_plan_node')
+graph.add_edge('interview_plan_node','main_interview_node')
+
+graph.add_conditional_edges(
+    'main_interview_node',
+    conditional_edge,
+    {
+        "continue":main_interview_node,
+        "end":END
+    }
+)
+
 
 
