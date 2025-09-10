@@ -27,7 +27,7 @@ async def text_chunker(chunks):
     buffer = ''
     
     async for text in chunks:
-        if buffer.startswith(splitters):
+        if buffer.endswith(splitters):
             yield buffer + ""
             buffer = text
         # elif text.startswith(splitters):
@@ -70,7 +70,7 @@ async def text_to_speech_input_streaming(voice_id,text_iterator):
     async with websockets.connect(uri) as ws:
         await ws.send(json.dumps({
             "text":" ",
-            "voice_setttings":{"stability":0.5,"similarity_boost":0.8},
+            "voice_settings":{"stability":0.5,"similarity_boost":0.8},
             "xi_api_key":ELEVENLABS_API_KEY
         }))
         
@@ -92,13 +92,23 @@ async def text_to_speech_input_streaming(voice_id,text_iterator):
         listen_task = asyncio.create_task(stream(listen()))
         
         async for text in text_chunker(text_iterator):
-            await ws.send(json.dumps({"text":text}))
+            await ws.send(json.dumps({"text":text,"try_trigger_generation":True}))
         
-        await ws.send(json.dumps({"text":"","flus":True}))
+        await ws.send(json.dumps({"text":""}))
             
         await listen_task
 
 
+async def chat_completion(query):
+    response = await aclient.chat.completions.create(model="gpt-4",messages=[{"role":'user','content':query}],temperature=1,stream=True)
+    
+    async def text_iterator():
+        async for chunk in response:
+            delta = chunk.choices[0].delta
+            yield delta.content
+    
+    await text_to_speech_input_streaming(VOICEID,text_iterator())
+
 if __name__ == "__main__":
     text_to_send = "hello world"
-    asyncio.run(text_to_speech_input_streaming(VOICEID,text_to_send))
+    asyncio.run(chat_completion(text_to_send))
