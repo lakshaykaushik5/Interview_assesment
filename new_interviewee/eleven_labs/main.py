@@ -58,30 +58,5 @@ async def listen(websocket):
             print(e)
             break
         
-import requests
 
-def check_subscription_and_voices():
-    headers = {"xi-api-key": ELEVEN_LABS_API_KEY}
-    
-    # Check available voices
-    voices_response = requests.get("https://api.elevenlabs.io/v1/voices", headers=headers)
-    if voices_response.status_code == 200:
-        voices = voices_response.json()
-        for voice in voices["voices"]:
-            if voice["voice_id"] == "Xb7hH8MSUJpSbSDYk0k2":
-                print(f"Voice found: {voice['name']}")
-                print(f"Category: {voice.get('category', 'N/A')}")
-                break
-    
-    # Check subscription
-    user_response = requests.get("https://api.elevenlabs.io/v1/user", headers=headers)
-    if user_response.status_code == 200:
-        user_info = user_response.json()
-        print(f"Subscription: {user_info.get('subscription', {}).get('tier', 'N/A')}")
-    
-    return voices_response.status_code, user_response.status_code
-
-check_subscription_and_voices()
-
-
-# asyncio.run(text_to_speech_ws_streaming(voice_id, model_id))
+asyncio.run(text_to_speech_ws_streaming(voice_id, model_id))
