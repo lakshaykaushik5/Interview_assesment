@@ -4,6 +4,7 @@ backoff==2.2.1
 certifi==2025.8.3
 charset-normalizer==3.4.3
 distro==1.9.0
+elevenlabs==2.15.0
 greenlet==3.2.4
 grpcio==1.74.0
 h11==0.16.0
@@ -26,6 +27,7 @@ langgraph-prebuilt==0.6.4
 langgraph-sdk==0.2.0
 langsmith==0.4.13
 mem0ai==0.1.115
+mpv==1.0.8
 neo4j==5.28.2
 numpy==2.3.2
 openai==1.99.9
@@ -54,5 +56,6 @@ tqdm==4.67.1
 typing-inspection==0.4.1
 typing_extensions==4.14.1
 urllib3==2.5.0
+websockets==15.0.1
 xxhash==3.5.0
 zstandard==0.23.0

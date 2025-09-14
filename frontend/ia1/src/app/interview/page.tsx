@@ -102,6 +102,9 @@ export default function StreamPage() {
         try {
           const msg: TranscriptMessage = JSON.parse(evt.data);
           
+          console.log(msg," --------got msg from backend----------")
+          return
+
           switch (msg.type) {
             case "Begin":
               console.log('Session started:', msg.id);
