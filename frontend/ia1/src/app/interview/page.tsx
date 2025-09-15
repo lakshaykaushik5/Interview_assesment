@@ -1,312 +1,324 @@
 // app/stream/page.tsx
 "use client";
 
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useRef, useState, useEffect } from "react";
 
-type TranscriptMessage = {
-  type?: "Begin" | "Turn" | "Termination" | string;
-  id?: string;
-  transcript?: string;
-  turn_is_formatted?: boolean;
-  // other fields possible depending on AssemblyAI response
+type AudioMessage = {
+  type: "audio" | "text" | "error";
+  data?: string; // base64 audio data
+  text?: string; // transcript or response text
+  error?: string;
 };
 
 export default function StreamPage() {
   const [isRecording, setIsRecording] = useState(false);
-  const [partial, setPartial] = useState("");
-  const [finalText, setFinalText] = useState("");
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [transcript, setTranscript] = useState("");
+  const [response, setResponse] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [debug, setDebug] = useState<string>("");
 
   const wsRef = useRef<WebSocket | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const processorRef = useRef<ScriptProcessorNode | null>(null);
-  const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const tokenTimerRef = useRef<number | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
 
-  // helper: downsample Float32Array to 16kHz
-  function downsampleBuffer(buffer: Float32Array, inputSampleRate: number, outSampleRate = 16000) {
-    if (outSampleRate === inputSampleRate) return buffer;
-    const sampleRateRatio = inputSampleRate / outSampleRate;
-    const newLength = Math.round(buffer.length / sampleRateRatio);
-    const result = new Float32Array(newLength);
-    let offsetResult = 0;
-    let offsetBuffer = 0;
-    while (offsetResult < newLength) {
-      const nextOffsetBuffer = Math.round((offsetResult + 1) * sampleRateRatio);
-      let accum = 0, count = 0;
-      for (let i = offsetBuffer; i < nextOffsetBuffer && i < buffer.length; i++) {
-        accum += buffer[i];
-        count++;
+  // Initialize WebSocket connection to your backend
+  const connectWebSocket = useCallback(() => {
+    const wsUrl = `ws://localhost:8000/ws`; // Adjust URL as needed
+    const ws = new WebSocket(wsUrl);
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      setDebug((d) => d + "Connected to backend WebSocket\n");
+    };
+
+    ws.onmessage = async (event) => {
+      try {
+        // Handle both text and binary messages
+
+        console.log(" --- was here - on message")
+        if (typeof event.data === "string") {
+          const message: AudioMessage = JSON.parse(event.data);
+          
+          switch (message.type) {
+            case "text":
+              if (message.text?.includes("transcript:")) {
+                setTranscript(message.text.replace("transcript:", ""));
+              } else {
+                setResponse(message.text || "");
+              }
+              break;
+              
+            case "audio":
+              await playAudioFromBase64(message.data || "");
+              break;
+              
+            case "error":
+              setError(message.error || "Unknown error");
+              break;
+          }
+        } else {
+          // Handle binary audio data
+          await playAudioFromArrayBuffer(event.data);
+        }
+        
+        setIsProcessing(false);
+      } catch (e) {
+        console.error("Error handling WebSocket message:", e);
+        setDebug((d) => d + "Error parsing WebSocket message\n");
       }
-      result[offsetResult] = count ? accum / count : 0;
-      offsetResult++;
-      offsetBuffer = nextOffsetBuffer;
-    }
-    return result;
-  }
+    };
 
-  // helper: convert Float32Array -> PCM16 ArrayBuffer
-  function floatTo16BitPCM(float32Array: Float32Array) {
-    const buffer = new ArrayBuffer(float32Array.length * 2);
-    const view = new DataView(buffer);
-    let offset = 0;
-    for (let i = 0; i < float32Array.length; i++, offset += 2) {
-      let s = Math.max(-1, Math.min(1, float32Array[i]));
-      view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true); // little endian
-    }
-    return buffer;
-  }
+    ws.onerror = (error) => {
+      console.error("WebSocket error:", error);
+      setError("WebSocket connection error");
+      setDebug((d) => d + "WebSocket error\n");
+    };
 
-  // get temporary streaming token from our backend
-  const getToken = useCallback(async () => {
-    const res = await fetch("/api/assemblyai");
-    if (!res.ok) {
-      const txt = await res.text();
-      throw new Error("Failed to get token: " + txt);
-    }
-    const data = await res.json();
-    return data.token as string;
+    ws.onclose = (event) => {
+      setDebug((d) => d + `WebSocket closed: ${event.code} ${event.reason}\n`);
+      setIsRecording(false);
+      setIsProcessing(false);
+    };
   }, []);
+
+  // Play audio from base64 string
+  const playAudioFromBase64 = async (base64Data: string) => {
+    try {
+      const binaryString = window.atob(base64Data);
+      const len = binaryString.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      await playAudioFromArrayBuffer(bytes.buffer);
+    } catch (e) {
+      console.error("Error playing base64 audio:", e);
+      setDebug((d) => d + "Error playing base64 audio\n");
+    }
+  };
+
+  // Play audio from ArrayBuffer
+  const playAudioFromArrayBuffer = async (arrayBuffer: ArrayBuffer) => {
+    try {
+      if (!audioContextRef.current) {
+        audioContextRef.current = new AudioContext();
+      }
+      
+      const audioContext = audioContextRef.current;
+      
+      if (audioContext.state === 'suspended') {
+        await audioContext.resume();
+      }
+
+      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+      const source = audioContext.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(audioContext.destination);
+      source.start(0);
+      
+      setDebug((d) => d + "Playing audio response\n");
+    } catch (e) {
+      console.error("Error playing audio:", e);
+      setDebug((d) => d + "Error playing audio\n");
+    }
+  };
+
+  // Send accumulated audio chunks to backend
+  const sendAudioToBackend = useCallback(async () => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN || audioChunksRef.current.length === 0) {
+      return;
+    }
+
+    try {
+      setIsProcessing(true);
+      setDebug((d) => d + "Sending audio to backend for processing...\n");
+
+      const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+      const arrayBuffer = await audioBlob.arrayBuffer();
+      
+      // Send binary audio data
+      console.log( " ------------- here sending audio file --------------")
+      wsRef.current.send(arrayBuffer);
+      
+      setDebug((d) => d + `Sent ${audioBlob.size} bytes of audio data\n`);
+      
+      // Clear chunks after sending
+      audioChunksRef.current = [];
+    } catch (error) {
+      console.error("Error sending audio:", error);
+      setError("Failed to send audio to backend");
+      setIsProcessing(false);
+    }
+  }, []);
+
+  // Reset silence timer
+  const resetSilenceTimer = useCallback(() => {
+    if (silenceTimeoutRef.current) {
+      clearTimeout(silenceTimeoutRef.current);
+    }
+    
+    // Set 5-second silence detection
+    silenceTimeoutRef.current = setTimeout(() => {
+      setDebug((d) => d + "5-second silence detected, processing audio...\n");
+      sendAudioToBackend();
+    }, 5000);
+  }, [sendAudioToBackend]);
 
   const startRecording = useCallback(async () => {
     setError(null);
     setDebug("");
+    setTranscript("");
+    setResponse("");
+
+    console.log(" here in recording function --------------------")
+
     try {
-      // basic support check
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        setError("getUserMedia not supported in this browser");
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setError("getUserMedia not supported");
         return;
       }
 
-      // 1) request microphone
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
+      // Connect WebSocket if not already connected
+      if (!wsRef.current || wsRef.current.readyState === WebSocket.CLOSED) {
+        connectWebSocket();
+      }
 
-      // 2) get token
-      const token = await getToken();
+      // Get microphone stream
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          sampleRate: 16000,
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true
+        }
+      });
 
-      // 3) open websocket to AssemblyAI (v3) with encoding parameter
-      const wsUrl = `wss://streaming.assemblyai.com/v3/ws?sample_rate=16000&encoding=pcm_s16le&token=${token}`;
-      const ws = new WebSocket(wsUrl);
-      wsRef.current = ws;
+      console.log(" here 111111 ",stream)
       
-      ws.onopen = () => {
-        console.log('WS open');
-        setDebug((d) => d + "WebSocket connected\n");
-        // No need to send SessionBegins for v3 - session starts automatically
-      };
+      streamRef.current = stream;
+      audioChunksRef.current = [];
 
-      ws.onmessage = (evt) => {
-        try {
-          const msg: TranscriptMessage = JSON.parse(evt.data);
-          
-          console.log(msg," --------got msg from backend----------")
-          return
+      // Setup MediaRecorder
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
+        ? 'audio/webm;codecs=opus' 
+        : 'audio/webm';
 
-          switch (msg.type) {
-            case "Begin":
-              console.log('Session started:', msg.id);
-              setDebug((d) => d + `Session started: ${msg.id}\n`);
-              setIsRecording(true);
-              break;
-              
-            case "Turn":
-              if (msg.turn_is_formatted) {
-                // Final transcript
-                setFinalText((prev) => (prev ? prev + " " : "") + (msg.transcript || ""));
-                setPartial("");
-                setDebug((d) => d + "Final: " + (msg.transcript || "") + "\n");
-              } else {
-                // Partial transcript
-                setPartial(msg.transcript || "");
-              }
-              break;
-              
-            case "Termination":
-              console.log('Session terminated');
-              setDebug((d) => d + "Session terminated\n");
-              setIsRecording(false);
-              break;
-              
-            default:
-              console.log("Unknown message type:", msg.type);
-              setDebug((d) => d + `Unknown message: ${msg.type}\n`);
-          }
-        } catch (e) {
-          console.warn("Failed to parse ws message", e, evt.data);
-          setDebug((d) => d + "Failed to parse message\n");
+      console.log(" here 222222 ",mimeType)
+        
+      const mediaRecorder = new MediaRecorder(stream, { 
+        mimeType,
+        audioBitsPerSecond: 128000
+      });
+      
+      mediaRecorderRef.current = mediaRecorder;
+
+      console.log(" here 3333333333333333", mediaRecorder)
+
+      mediaRecorder.ondataavailable = (event) => {
+        // console.log(" here 444444444444 ",event)
+        if (event.data && event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+          console.log(" here 555555555555555555",event.data)
+          resetSilenceTimer();
+          setDebug((d) => d + `Audio chunk recorded: ${event.data.size} bytes\n`);
         }
       };
 
-      ws.onerror = (err) => {
-        console.error("WS error", err);
-        setDebug((d) => d + "WS error\n");
+      mediaRecorder.onerror = (event) => {
+        console.error("MediaRecorder error:", event);
+        setError("Recording error occurred");
       };
 
-      ws.onclose = (ev) => {
-        console.log("WS closed", ev);
-        setDebug((d) => d + `WS closed: code=${ev.code} reason=${ev.reason}\n`);
-        setIsRecording(false);
-      };
-
-      // 4) start WebAudio capture & processor
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      audioContextRef.current = audioContext;
-
-      // some browsers require a user gesture to resume context; we are in a click handler so OK
-      if (audioContext.state === "suspended") {
-        await audioContext.resume();
-      }
-
-      const source = audioContext.createMediaStreamSource(stream);
-      sourceRef.current = source;
-
-      // Create script processor (bufferSize 4096). Note: AudioWorklet is better but this is simpler.
-      const bufferSize = 4096;
-      const processor = audioContext.createScriptProcessor(bufferSize, 1, 1);
-      processorRef.current = processor;
-
-      // create a gain node to avoid audible output (connect processor->gain(0)->destination)
-      const silentGain = audioContext.createGain();
-      silentGain.gain.value = 0;
-
-      processor.onaudioprocess = (e) => {
-        try {
-          const inputData = e.inputBuffer.getChannelData(0); // Float32Array
-          // downsample to 16000
-          const downsampled = downsampleBuffer(inputData, audioContext.sampleRate, 16000);
-          // convert to 16-bit PCM
-          const pcm16 = floatTo16BitPCM(downsampled);
-          
-          // send raw PCM data as binary WebSocket message (not JSON)
-          if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-            wsRef.current.send(pcm16);
-          }
-        } catch (err) {
-          console.error("Audio processing error", err);
+      mediaRecorder.onstop = () => {
+        setDebug((d) => d + "Recording stopped\n");
+        if (audioChunksRef.current.length > 0) {
+          sendAudioToBackend();
         }
       };
 
-      // connect nodes
-      source.connect(processor);
-      processor.connect(silentGain);
-      silentGain.connect(audioContext.destination);
+      // Start recording with small time slices for better silence detection
+      mediaRecorder.start(100);
+      setIsRecording(true);
+      setDebug((d) => d + "Recording started - speak now (5 sec pause will trigger processing)\n");
 
-      // optional: token refresh if you expect long sessions (token expiry). We'll set a timer to refresh token ~50 minutes for 1h token
-      if (tokenTimerRef.current) {
-        window.clearTimeout(tokenTimerRef.current);
-        tokenTimerRef.current = null;
-      }
-      // refresh after 50 minutes (if using 3600s expiry)
-      tokenTimerRef.current = window.setTimeout(async () => {
-        try {
-          setDebug((d) => d + "Refreshing token...\n");
-          const newToken = await getToken();
-          // Not all servers support "auth update" over opened ws. If required, close and reopen.
-          console.log("new token", newToken);
-        } catch (e) {
-          console.warn("token refresh failed", e);
-        }
-      }, 50 * 60 * 1000);
-
-      setDebug((d) => d + "Recording started\n");
     } catch (err: any) {
-      console.error("startRecording error", err);
+      console.error("Error starting recording:", err);
       setError(err?.message || String(err));
       setIsRecording(false);
     }
-  }, [getToken]);
+  }, [connectWebSocket, resetSilenceTimer]);
 
   const stopRecording = useCallback(() => {
     try {
-      setDebug((d) => d + "Stopping...\n");
-
-      // stop processor
-      if (processorRef.current) {
-        try {
-          processorRef.current.disconnect();
-        } catch { }
-        processorRef.current.onaudioprocess = null;
-        processorRef.current = null;
+      // Clear silence timer
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+        silenceTimeoutRef.current = null;
       }
 
-      // stop source
-      if (sourceRef.current) {
-        try {
-          sourceRef.current.disconnect();
-        } catch { }
-        sourceRef.current = null;
+      // Stop media recorder
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+        mediaRecorderRef.current.stop();
       }
 
-      // close audio context
-      if (audioContextRef.current) {
-        try {
-          audioContextRef.current.close();
-        } catch { }
-        audioContextRef.current = null;
-      }
-
-      // stop tracks
+      // Stop media stream
       if (streamRef.current) {
-        streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current.getTracks().forEach(track => track.stop());
         streamRef.current = null;
       }
 
-      // send session termination and close socket
-      if (wsRef.current) {
-        try {
-          if (wsRef.current.readyState === WebSocket.OPEN) {
-            // Send proper termination message for v3
-            wsRef.current.send(JSON.stringify({ type: "Terminate" }));
-          }
-        } catch (e) {
-          console.warn("error sending termination", e);
-        }
-        try {
-          wsRef.current.close();
-        } catch { }
-        wsRef.current = null;
-      }
-
-      if (tokenTimerRef.current) {
-        window.clearTimeout(tokenTimerRef.current);
-        tokenTimerRef.current = null;
+      // Close WebSocket
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.close();
       }
 
       setIsRecording(false);
-      setDebug((d) => d + "Stopped\n");
+      setDebug((d) => d + "Recording stopped\n");
     } catch (err) {
-      console.error("stopRecording error", err);
+      console.error("Error stopping recording:", err);
       setError("Error stopping recording");
     }
   }, []);
 
+  // Cleanup on component unmount
+  useEffect(() => {
+    return () => {
+      stopRecording();
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+      }
+    };
+  }, [stopRecording]);
+
   return (
     <div style={{ maxWidth: 800, margin: "0 auto", padding: 20 }}>
-      <h2>AssemblyAI Realtime — Universal Streaming v3 (PCM16 16kHz)</h2>
-
+      <h2>Voice AI Assistant - Speech to Speech</h2>
+      
       <div style={{ marginBottom: 12 }}>
         <button
           onClick={isRecording ? stopRecording : startRecording}
+          disabled={isProcessing}
           style={{
             padding: "8px 16px",
-            background: isRecording ? "#ef4444" : "#2563eb",
+            background: isRecording ? "#ef4444" : (isProcessing ? "#9ca3af" : "#2563eb"),
             color: "white",
             border: "none",
             borderRadius: 6,
-            cursor: "pointer",
+            cursor: isProcessing ? "not-allowed" : "pointer",
             marginRight: 10,
           }}
         >
-          {isRecording ? "Stop" : "Start"}
+          {isProcessing ? "Processing..." : (isRecording ? "Stop Recording" : "Start Recording")}
         </button>
 
         <button
           onClick={() => {
-            setFinalText("");
-            setPartial("");
+            setTranscript("");
+            setResponse("");
             setError(null);
             setDebug("");
           }}
@@ -324,22 +336,89 @@ export default function StreamPage() {
       </div>
 
       {error && (
-        <div style={{ padding: 8, background: "#fee2e2", color: "#991b1b", borderRadius: 6 }}>
-          Error: {error}
+        <div style={{ 
+          padding: 12, 
+          background: "#fee2e2", 
+          color: "#991b1b", 
+          borderRadius: 6,
+          marginBottom: 12
+        }}>
+          <strong>Error:</strong> {error}
         </div>
       )}
 
-      <div style={{ minHeight: 100, border: "1px solid #e5e7eb", padding: 12, borderRadius: 6 }}>
-        <div style={{ fontSize: 14, color: "#111827" }}>{finalText}</div>
-        {partial && <div style={{ fontStyle: "italic", color: "#6b7280" }}>{partial}</div>}
-        {!finalText && !partial && <div style={{ color: "#9ca3af" }}>No transcript yet.</div>}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+        <div>
+          <h3 style={{ margin: "0 0 8px 0", fontSize: 16 }}>Transcript</h3>
+          <div style={{ 
+            minHeight: 80, 
+            border: "1px solid #e5e7eb", 
+            padding: 12, 
+            borderRadius: 6,
+            background: "#f9fafb"
+          }}>
+            {transcript || <span style={{ color: "#9ca3af" }}>Your speech will appear here...</span>}
+          </div>
+        </div>
+
+        <div>
+          <h3 style={{ margin: "0 0 8px 0", fontSize: 16 }}>AI Response</h3>
+          <div style={{ 
+            minHeight: 80, 
+            border: "1px solid #e5e7eb", 
+            padding: 12, 
+            borderRadius: 6,
+            background: "#f0f9ff"
+          }}>
+            {response || <span style={{ color: "#9ca3af" }}>AI response will appear here...</span>}
+          </div>
+        </div>
       </div>
 
-      <pre style={{ marginTop: 12, whiteSpace: "pre-wrap", background: "#f8fafc", padding: 8, borderRadius: 6 }}>
-        <strong>Debug:</strong>
-        {"\n"}
-        {debug}
-      </pre>
+      <div style={{ marginBottom: 12 }}>
+        <div style={{
+          padding: 8,
+          background: isRecording ? "#dcfce7" : "#f3f4f6",
+          borderRadius: 6,
+          textAlign: "center",
+          fontSize: 14,
+          fontWeight: "bold",
+          color: isRecording ? "#166534" : "#374151"
+        }}>
+          {isRecording ? "🔴 Recording... (5 sec pause will trigger processing)" : 
+           isProcessing ? "🔄 Processing your speech..." : 
+           "⭕ Ready to record"}
+        </div>
+      </div>
+
+      <details style={{ marginTop: 12 }}>
+        <summary style={{ cursor: "pointer", fontWeight: "bold", marginBottom: 8 }}>
+          Debug Log
+        </summary>
+        <pre style={{ 
+          whiteSpace: "pre-wrap", 
+          background: "#f8fafc", 
+          padding: 12, 
+          borderRadius: 6,
+          fontSize: 12,
+          maxHeight: 200,
+          overflow: "auto",
+          border: "1px solid #e2e8f0"
+        }}>
+          {debug || "No debug information yet..."}
+        </pre>
+      </details>
+
+      <div style={{ marginTop: 20, fontSize: 14, color: "#6b7280" }}>
+        <h4>How to use:</h4>
+        <ol>
+          <li>Click "Start Recording" to begin</li>
+          <li>Speak naturally into your microphone</li>
+          <li>Pause for 5 seconds to automatically trigger processing</li>
+          <li>Your speech will be transcribed, processed by AI, and played back</li>
+          <li>Click "Stop Recording" to end the session</li>
+        </ol>
+      </div>
     </div>
   );
 }

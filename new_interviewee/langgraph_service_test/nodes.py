@@ -5,6 +5,7 @@ from langgraph.graph.message import add_messages
 from langchain.chat_models import init_chat_model
 import os
 from dotenv import load_dotenv, find_dotenv
+import uvicorn
 
 from langchain_core.messages import HumanMessage
 from fastapi import FastAPI,WebSocket,WebSocketDisconnect
@@ -14,8 +15,11 @@ import websockets
 from assemblyai.streaming.v3 import (StreamingClient, StreamingClientOptions, StreamingParameters,StreamingEvents,BeginEvent,TurnEvent,TerminationEvent,StreamingError)
 from typing import AsyncGenerator, Type
 
-voice_id = ""
-ELEVENLABS_API_KEY=""
+load_dotenv(find_dotenv())
+
+ELEVENLABS_API_KEY = os.getenv('ELEVENLABS_API_KEY')
+voice_id = "21m00Tcm4TlvDq8ikWAM"
+
 
 
 
@@ -111,9 +115,11 @@ async def stream_graph_updates_v1_1(input_queue,output_queue):
     
 
 async def listen_fun(websocket,input_queue):
+    print("was here --------------- ")
     try:
         while True:
             data = await websocket.receive_json()  
+            print(" ---------------1 ---------------",data)
             await input_queue.put(data)
     except WebSocketDisconnect:
         print("Websockets disconnected")
@@ -135,14 +141,14 @@ async def send_fun(websocket,output_queue):
         pass
     
 
-def create_event_handlers(output_queue: asyncio.Queue):
+def create_event_handlers(output_queue: asyncio.Queue,loop):
     def on_begin(client: Type[StreamingClient], event: BeginEvent):
         print(f"Session Started : {event.id}")
 
     def on_turn(client: Type[StreamingClient], event: TurnEvent):
         print(f"Transcript update : {event.transcript}")
         # Use create_task to avoid blocking
-        asyncio.create_task(output_queue.put(event.transcript))
+        asyncio.run_coroutine_threadsafe(output_queue.put(event.transcript),loop)
 
     def on_termination(client: Type[StreamingClient], event: TerminationEvent):
         print(f"Session terminated after {event.audio_duration_seconds} seconds")
@@ -161,11 +167,13 @@ assemblyai_api_key = os.getenv('ASSEMBLYAI_API_KEY')
 
 async def speech_to_assemblyai(input_queue,output_queue):
     client = StreamingClient(
-        api_key=assemblyai_api_key,
-        api_host = "streaming.assemblyai.com"
-    )
+        StreamingClientOptions(
+            api_key=assemblyai_api_key,
+            api_host = "streaming.assemblyai.com"
+    ))
+    loop = asyncio.get_running_loop()
 
-    on_begin, on_turn, on_termination, on_error = create_event_handlers(output_queue)
+    on_begin, on_turn, on_termination, on_error = create_event_handlers(output_queue,loop)
 
     
     client.on(StreamingEvents.Begin,on_begin)
@@ -173,7 +181,7 @@ async def speech_to_assemblyai(input_queue,output_queue):
     client.on(StreamingEvents.Termination,on_termination)
     client.on(StreamingEvents.Error,on_error)
     
-    await client.connect(
+    client.connect(
         StreamingParameters(
             sample_rate=16000,
             format_turns=True
@@ -249,3 +257,9 @@ async def langgraph_listen(websocket:WebSocket):
     
     await asyncio.gather(listen_task,assemblyai_task,graph_stream_task,elevenlabs_task,send_task)
     
+    
+
+
+if __name__=='__main__':
+    print(" Starting Server at port 8000 . . . . .")
+    uvicorn.run(app,host="localhost",port = 8000)
