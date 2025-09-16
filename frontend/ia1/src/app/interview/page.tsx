@@ -42,7 +42,7 @@ export default function StreamPage() {
         console.log(" --- was here - on message")
         if (typeof event.data === "string") {
           const message: AudioMessage = JSON.parse(event.data);
-          
+
           switch (message.type) {
             case "text":
               if (message.text?.includes("transcript:")) {
@@ -51,11 +51,11 @@ export default function StreamPage() {
                 setResponse(message.text || "");
               }
               break;
-              
+
             case "audio":
               await playAudioFromBase64(message.data || "");
               break;
-              
+
             case "error":
               setError(message.error || "Unknown error");
               break;
@@ -64,7 +64,7 @@ export default function StreamPage() {
           // Handle binary audio data
           await playAudioFromArrayBuffer(event.data);
         }
-        
+
         setIsProcessing(false);
       } catch (e) {
         console.error("Error handling WebSocket message:", e);
@@ -107,9 +107,9 @@ export default function StreamPage() {
       if (!audioContextRef.current) {
         audioContextRef.current = new AudioContext();
       }
-      
+
       const audioContext = audioContextRef.current;
-      
+
       if (audioContext.state === 'suspended') {
         await audioContext.resume();
       }
@@ -119,7 +119,7 @@ export default function StreamPage() {
       source.buffer = audioBuffer;
       source.connect(audioContext.destination);
       source.start(0);
-      
+
       setDebug((d) => d + "Playing audio response\n");
     } catch (e) {
       console.error("Error playing audio:", e);
@@ -139,13 +139,13 @@ export default function StreamPage() {
 
       const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
       const arrayBuffer = await audioBlob.arrayBuffer();
-      
+
       // Send binary audio data
-      console.log( " ------------- here sending audio file --------------")
+      console.log(" ------------- here sending audio file --------------")
       wsRef.current.send(arrayBuffer);
-      
+
       setDebug((d) => d + `Sent ${audioBlob.size} bytes of audio data\n`);
-      
+
       // Clear chunks after sending
       audioChunksRef.current = [];
     } catch (error) {
@@ -160,13 +160,37 @@ export default function StreamPage() {
     if (silenceTimeoutRef.current) {
       clearTimeout(silenceTimeoutRef.current);
     }
-    
+
     // Set 5-second silence detection
     silenceTimeoutRef.current = setTimeout(() => {
       setDebug((d) => d + "5-second silence detected, processing audio...\n");
       sendAudioToBackend();
     }, 5000);
   }, [sendAudioToBackend]);
+
+  const isSoundDetected = useCallback(() => {
+    if (!audioContextRef.current || !audioContextRef.current.state) {
+      return false
+    }
+
+    const analyser = audioContextRef.current.createAnalyser()
+    const dataArray = new Uint8Array(analyser.frequencyBinCount)
+
+
+    let sum = 0
+    for (let i = 0; i < dataArray.length; i++) {
+      sum += dataArray[i]
+    }
+
+    const average = sum / dataArray.length
+
+    const soundDetected = average > 20
+
+    setDebug((d) => d + `Average audio level : ${average.toFixed(2)}. Sound detected : ${soundDetected}\n`)
+
+    return soundDetected
+
+  }, [])
 
   const startRecording = useCallback(async () => {
     setError(null);
@@ -197,23 +221,35 @@ export default function StreamPage() {
         }
       });
 
-      console.log(" here 111111 ",stream)
-      
+      console.log(" here 111111 ", stream)
+
+
       streamRef.current = stream;
+
+      audioContextRef.current = new AudioContext()
+
+      const source = audioContextRef.current.createMediaStreamSource(stream)
+      const analyser = audioContextRef.current.createAnalyser()
+      analyser.fftSize = 256
+      source.connect(analyser)
+
+      const dataArray = new Uint8Array(analyser.frequencyBinCount)
+
+
       audioChunksRef.current = [];
 
       // Setup MediaRecorder
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
-        ? 'audio/webm;codecs=opus' 
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
         : 'audio/webm';
 
-      console.log(" here 222222 ",mimeType)
-        
-      const mediaRecorder = new MediaRecorder(stream, { 
+      console.log(" here 222222 ", mimeType)
+
+      const mediaRecorder = new MediaRecorder(stream, {
         mimeType,
         audioBitsPerSecond: 128000
       });
-      
+
       mediaRecorderRef.current = mediaRecorder;
 
       console.log(" here 3333333333333333", mediaRecorder)
@@ -221,10 +257,18 @@ export default function StreamPage() {
       mediaRecorder.ondataavailable = (event) => {
         // console.log(" here 444444444444 ",event)
         if (event.data && event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-          console.log(" here 555555555555555555",event.data)
-          resetSilenceTimer();
-          setDebug((d) => d + `Audio chunk recorded: ${event.data.size} bytes\n`);
+          if (isSoundDetected()) {
+            audioChunksRef.current.push(event.data)
+            resetSilenceTimer()
+            setDebug((d) => d + `Audio chunk recorded with sound : ${event.data.size} bytes \n`)
+
+          } else {
+
+            // audioChunksRef.current.push(event.data);
+            // console.log(" here 555555555555555555",event.data)
+            resetSilenceTimer();
+            setDebug((d) => d + `Audio chunk recorded silence detected: ${event.data.size} bytes\n`);
+          }
         }
       };
 
@@ -297,7 +341,7 @@ export default function StreamPage() {
   return (
     <div style={{ maxWidth: 800, margin: "0 auto", padding: 20 }}>
       <h2>Voice AI Assistant - Speech to Speech</h2>
-      
+
       <div style={{ marginBottom: 12 }}>
         <button
           onClick={isRecording ? stopRecording : startRecording}
@@ -336,10 +380,10 @@ export default function StreamPage() {
       </div>
 
       {error && (
-        <div style={{ 
-          padding: 12, 
-          background: "#fee2e2", 
-          color: "#991b1b", 
+        <div style={{
+          padding: 12,
+          background: "#fee2e2",
+          color: "#991b1b",
           borderRadius: 6,
           marginBottom: 12
         }}>
@@ -350,10 +394,10 @@ export default function StreamPage() {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
         <div>
           <h3 style={{ margin: "0 0 8px 0", fontSize: 16 }}>Transcript</h3>
-          <div style={{ 
-            minHeight: 80, 
-            border: "1px solid #e5e7eb", 
-            padding: 12, 
+          <div style={{
+            minHeight: 80,
+            border: "1px solid #e5e7eb",
+            padding: 12,
             borderRadius: 6,
             background: "#f9fafb"
           }}>
@@ -363,10 +407,10 @@ export default function StreamPage() {
 
         <div>
           <h3 style={{ margin: "0 0 8px 0", fontSize: 16 }}>AI Response</h3>
-          <div style={{ 
-            minHeight: 80, 
-            border: "1px solid #e5e7eb", 
-            padding: 12, 
+          <div style={{
+            minHeight: 80,
+            border: "1px solid #e5e7eb",
+            padding: 12,
             borderRadius: 6,
             background: "#f0f9ff"
           }}>
@@ -385,9 +429,9 @@ export default function StreamPage() {
           fontWeight: "bold",
           color: isRecording ? "#166534" : "#374151"
         }}>
-          {isRecording ? "🔴 Recording... (5 sec pause will trigger processing)" : 
-           isProcessing ? "🔄 Processing your speech..." : 
-           "⭕ Ready to record"}
+          {isRecording ? "🔴 Recording... (5 sec pause will trigger processing)" :
+            isProcessing ? "🔄 Processing your speech..." :
+              "⭕ Ready to record"}
         </div>
       </div>
 
@@ -395,10 +439,10 @@ export default function StreamPage() {
         <summary style={{ cursor: "pointer", fontWeight: "bold", marginBottom: 8 }}>
           Debug Log
         </summary>
-        <pre style={{ 
-          whiteSpace: "pre-wrap", 
-          background: "#f8fafc", 
-          padding: 12, 
+        <pre style={{
+          whiteSpace: "pre-wrap",
+          background: "#f8fafc",
+          padding: 12,
           borderRadius: 6,
           fontSize: 12,
           maxHeight: 200,
