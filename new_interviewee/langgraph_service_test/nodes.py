@@ -115,11 +115,11 @@ async def stream_graph_updates_v1_1(input_queue,output_queue):
     
 
 async def listen_fun(websocket,input_queue):
-    print("was here --------------- ")
+    print("was here --------------- just few seconds ago ")
     try:
         while True:
-            data = await websocket.receive_json()  
-            print(" ---------------1 ---------------",data)
+            data = await websocket.receive_bytes()  
+            print(" ---------------1 ---------------")
             await input_queue.put(data)
     except WebSocketDisconnect:
         print("Websockets disconnected")

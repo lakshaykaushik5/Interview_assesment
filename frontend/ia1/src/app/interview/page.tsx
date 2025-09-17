@@ -236,7 +236,7 @@ export default function StreamPage() {
       };
 
       // Start recording and the initial silence timer
-      mediaRecorder.start(250); // Collect data every 250ms
+      mediaRecorder.start(100); // Collect data every 250ms
       setIsRecording(true);
       resetSilenceTimer();
       setDebug("Recording started... speak now.\n");
