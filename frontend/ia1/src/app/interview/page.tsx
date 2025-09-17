@@ -143,6 +143,8 @@ export default function StreamPage() {
       setIsProcessing(false);
     }
   }, []);
+
+
   
   // **FIXED**: This function now correctly detects sound from the microphone
   const isSoundDetected = useCallback(() => {
@@ -173,6 +175,50 @@ export default function StreamPage() {
     }, 2000); // Using 2 seconds for quicker response
   }, [sendAudioToBackend]);
 
+
+  const startRecording2 = useCallback(async ()=>{
+
+    setError(null)
+    setDebug("")
+    setTranscript("")
+    setResponse("")
+
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setError("Your browser does not support audio recording.");
+        return;
+      }
+
+      if (!wsRef.current || wsRef.current.readyState === WebSocket.CLOSED) {
+        connectWebSocket();
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({audio:true})
+      const audioContext = new AudioContext()
+      const source = audioContext.createMediaStreamSource(stream)
+
+      await audioContext.audioWorklet.addModule('audio-processor-worker.js')
+
+      const processorNode = new AudioWorkletNode(audioContext,"audio-processor-worker.js")
+
+      source.connect(processorNode)
+
+      processorNode.connect(audioContext.destination)
+
+      processorNode.port.onmessage = (event)=>{
+        const rawAudioSamples = event.data
+        if(wsRef.current?.readyState === WebSocket.OPEN){
+          wsRef.current.send(rawAudioSamples.buffer)
+        }
+      }
+
+      
+    } catch (err:any) {
+      console.error("Error starting recording:", err);
+      setError(err?.message || "Could not start recording.");
+      setIsRecording(false);
+    }
+  },[connectWebSocket, resetSilenceTimer, sendAudioToBackend, isSoundDetected])
 
   const startRecording = useCallback(async () => {
     setError(null);
