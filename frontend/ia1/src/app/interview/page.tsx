@@ -192,14 +192,22 @@ export default function StreamPage() {
       if (!wsRef.current || wsRef.current.readyState === WebSocket.CLOSED) {
         connectWebSocket();
       }
+      const sampleRate = 16000;
 
-      const stream = await navigator.mediaDevices.getUserMedia({audio:true})
-      const audioContext = new AudioContext()
+      const stream = await navigator.mediaDevices.getUserMedia({audio:{
+        sampleRate:sampleRate,
+        channelCount:1
+      }})
+      const audioContext = new AudioContext({sampleRate:sampleRate})
       const source = audioContext.createMediaStreamSource(stream)
 
       await audioContext.audioWorklet.addModule('/audio-processor-worker.js')
 
-      const processorNode = new AudioWorkletNode(audioContext,"audio-processor-worker")
+      const processorNode = new AudioWorkletNode(audioContext,"audio-processor-worker",{
+        processorOptions:{
+          sampleRate:sampleRate
+        }
+      })
 
       source.connect(processorNode)
 
