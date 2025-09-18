@@ -197,9 +197,9 @@ export default function StreamPage() {
       const audioContext = new AudioContext()
       const source = audioContext.createMediaStreamSource(stream)
 
-      await audioContext.audioWorklet.addModule('audio-processor-worker.js')
+      await audioContext.audioWorklet.addModule('/audio-processor-worker.js')
 
-      const processorNode = new AudioWorkletNode(audioContext,"audio-processor-worker.js")
+      const processorNode = new AudioWorkletNode(audioContext,"audio-processor-worker")
 
       source.connect(processorNode)
 
@@ -211,6 +211,9 @@ export default function StreamPage() {
           wsRef.current.send(rawAudioSamples.buffer)
         }
       }
+      setIsRecording(true);
+      setDebug("Recording started with AudioWorklet...");
+
 
       
     } catch (err:any) {
@@ -218,7 +221,7 @@ export default function StreamPage() {
       setError(err?.message || "Could not start recording.");
       setIsRecording(false);
     }
-  },[connectWebSocket, resetSilenceTimer, sendAudioToBackend, isSoundDetected])
+  },[])
 
   const startRecording = useCallback(async () => {
     setError(null);
@@ -325,7 +328,7 @@ export default function StreamPage() {
 
       <div style={{ marginBottom: 12 }}>
         <button
-          onClick={isRecording ? stopRecording : startRecording}
+          onClick={isRecording ? stopRecording : startRecording2}
           disabled={isProcessing}
           style={{
             padding: "10px 18px",

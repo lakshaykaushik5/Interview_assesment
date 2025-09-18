@@ -154,7 +154,7 @@ def create_event_handlers(output_queue: asyncio.Queue,loop):
         print(f"Session terminated after {event.audio_duration_seconds} seconds")
 
     def on_error(client: Type[StreamingClient], error: StreamingError):
-        print(f"Error : {error}")
+        print(f"Error :::::::::::::: {error}")
 
     return on_begin, on_turn, on_termination, on_error
 
@@ -163,7 +163,7 @@ def create_event_handlers(output_queue: asyncio.Queue,loop):
 
 assemblyai_api_key = os.getenv('ASSEMBLYAI_API_KEY')
 
-
+print(assemblyai_api_key," ===================================== ")
 
 async def speech_to_assemblyai(input_queue,output_queue):
     client = StreamingClient(
@@ -181,7 +181,7 @@ async def speech_to_assemblyai(input_queue,output_queue):
     client.on(StreamingEvents.Termination,on_termination)
     client.on(StreamingEvents.Error,on_error)
     
-    client.connect(
+    await client.connect(
         StreamingParameters(
             sample_rate=16000,
             format_turns=True

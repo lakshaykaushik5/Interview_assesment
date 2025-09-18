@@ -1,3 +1,5 @@
+/// <reference lib="webworker" />
+
 class AudioProcessor extends AudioWorkletProcessor{
 
     process(inputs,outputs,parameters){
