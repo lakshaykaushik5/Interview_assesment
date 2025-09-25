@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package speech_to_text;
+
+// Our service that defines the streaming function
+service SpeechToText {
+  // Client sends a stream of audio, server sends back a stream of text
+  rpc Transcribe(stream AudioChunk) returns (stream ConfirmationMsg);
+}
+
+// The message for each chunk of audio data from the client
+message AudioChunk {
+  bytes audio_data = 1;
+  int64 timestamp = 2;
+}
+
+// The message for each piece of transcribed text from the server
+message ConfirmationMsg {
+  bool received = 2; // Lets us know if this is the final result for a sentence
+}
