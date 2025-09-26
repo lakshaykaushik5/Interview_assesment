@@ -3,7 +3,9 @@
 import grpc
 import warnings
 
-import audio_pb2 as audio__pb2
+# import audio_pb2 as audio__pb2
+from . import audio_pb2 as audio__pb2
+
 
 GRPC_GENERATED_VERSION = '1.75.0'
 GRPC_VERSION = grpc.__version__

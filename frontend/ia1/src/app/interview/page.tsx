@@ -33,7 +33,7 @@ export default function StreamPage() {
 
   // Function to connect to the WebSocket backend
   const connectWebSocket = useCallback(() => {
-    const wsUrl = `ws://localhost:8000/ws`; // Adjust if your backend URL is different
+    const wsUrl = `ws://localhost:8010/ws`; // Adjust if your backend URL is different
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
