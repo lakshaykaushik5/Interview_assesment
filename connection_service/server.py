@@ -41,6 +41,8 @@ async def websocket_audio_sender(websocket: WebSocket):
             # Properly call the Transcribe RPC with the async generator
             call = audio_stub.Transcribe(audio_chunk_generator(websocket))
 
+            print( "call output --------- " ,call)
+
             async for confirmation in call:
                 # confirmation.received is a bool, send it as string for WebSocket text
                 await websocket.send_text(str(confirmation.received))

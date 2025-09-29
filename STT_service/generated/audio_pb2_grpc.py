@@ -3,9 +3,7 @@
 import grpc
 import warnings
 
-# import audio_pb2 as audio__pb2
-from . import audio_pb2 as audio__pb2
-
+import audio_pb2 as audio__pb2
 
 GRPC_GENERATED_VERSION = '1.75.0'
 GRPC_VERSION = grpc.__version__
@@ -40,7 +38,7 @@ class SpeechToTextStub(object):
         self.Transcribe = channel.stream_stream(
                 '/speech_to_text.SpeechToText/Transcribe',
                 request_serializer=audio__pb2.AudioChunk.SerializeToString,
-                response_deserializer=audio__pb2.ConfirmationMsg.FromString,
+                response_deserializer=audio__pb2.Transcripts.FromString,
                 _registered_method=True)
 
 
@@ -61,7 +59,7 @@ def add_SpeechToTextServicer_to_server(servicer, server):
             'Transcribe': grpc.stream_stream_rpc_method_handler(
                     servicer.Transcribe,
                     request_deserializer=audio__pb2.AudioChunk.FromString,
-                    response_serializer=audio__pb2.ConfirmationMsg.SerializeToString,
+                    response_serializer=audio__pb2.Transcripts.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -91,7 +89,7 @@ class SpeechToText(object):
             target,
             '/speech_to_text.SpeechToText/Transcribe',
             audio__pb2.AudioChunk.SerializeToString,
-            audio__pb2.ConfirmationMsg.FromString,
+            audio__pb2.Transcripts.FromString,
             options,
             channel_credentials,
             insecure,

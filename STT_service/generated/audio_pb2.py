@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0b\x61udio.proto\x12\x0espeech_to_text\"3\n\nAudioChunk\x12\x12\n\naudio_data\x18\x01 \x01(\x0c\x12\x11\n\ttimestamp\x18\x02 \x01(\x03\"#\n\x0f\x43onfirmationMsg\x12\x10\n\x08received\x18\x02 \x01(\x08\x32]\n\x0cSpeechToText\x12M\n\nTranscribe\x12\x1a.speech_to_text.AudioChunk\x1a\x1f.speech_to_text.ConfirmationMsg(\x01\x30\x01\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0b\x61udio.proto\x12\x0espeech_to_text\"3\n\nAudioChunk\x12\x12\n\naudio_data\x18\x01 \x01(\x0c\x12\x11\n\ttimestamp\x18\x02 \x01(\x03\"\"\n\x0bTranscripts\x12\x13\n\x0btranscripts\x18\x01 \x01(\t2Y\n\x0cSpeechToText\x12I\n\nTranscribe\x12\x1a.speech_to_text.AudioChunk\x1a\x1b.speech_to_text.Transcripts(\x01\x30\x01\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -33,8 +33,8 @@ if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
   _globals['_AUDIOCHUNK']._serialized_start=31
   _globals['_AUDIOCHUNK']._serialized_end=82
-  _globals['_CONFIRMATIONMSG']._serialized_start=84
-  _globals['_CONFIRMATIONMSG']._serialized_end=119
-  _globals['_SPEECHTOTEXT']._serialized_start=121
-  _globals['_SPEECHTOTEXT']._serialized_end=214
+  _globals['_TRANSCRIPTS']._serialized_start=84
+  _globals['_TRANSCRIPTS']._serialized_end=118
+  _globals['_SPEECHTOTEXT']._serialized_start=120
+  _globals['_SPEECHTOTEXT']._serialized_end=209
 # @@protoc_insertion_point(module_scope)

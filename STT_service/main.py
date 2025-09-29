@@ -47,16 +47,17 @@ def convert_to_16k_mono_pcm(audio_bytes, input_format="wav"):
 
 class SpeechToTextServicer(audio_pb2_grpc.SpeechToTextServicer):
     def Transcribe(self, request_iterator, context):
-        print(" here ----- we are")
         # Create choices for event/callbacks as you prefer -- here just logging.
         def on_begin(client, event): print("Session Started:", event.id)
         
         def on_turn(client, event):
+            nonlocal output_transcripts
             # print(event," --------------------- ")
             if hasattr(event, 'end_of_turn') :  # or event.final or equivalent
                 print(event.end_of_turn," -------------------")
                 if event.end_of_turn is True:
                     print("Final turn transcript:", event.transcript , " ------> ",event.end_of_turn)
+                    output_transcripts = event.transcript
                 # Send this finalized transcript to frontend, overwrite previous partial
  
             # print("Transcript update:", event.transcript,"-----\n\n\n",event.words)
@@ -87,11 +88,15 @@ class SpeechToTextServicer(audio_pb2_grpc.SpeechToTextServicer):
                 print("Audio chunk received at", request.timestamp)
                 pcm_audio = float32_to_int16_pcm(request.audio_data)
 
+
                 client.stream(pcm_audio)
                 # client.stream(request.audio_data)
                 # Optionally: Yield confirmation for each chunk
-                reply = audio_pb2.ConfirmationMsg(received=True)
-                yield reply
+                if output_transcripts:
+                    reply = audio_pb2.Transcript(output_transcripts)
+                     yield reply
+
+                     output_transcripts = ""
         finally:
             client.disconnect(terminate=True)
 

@@ -5,7 +5,7 @@ package speech_to_text;
 // Our service that defines the streaming function
 service SpeechToText {
   // Client sends a stream of audio, server sends back a stream of text
-  rpc Transcribe(stream AudioChunk) returns (stream ConfirmationMsg);
+  rpc Transcribe(stream AudioChunk) returns (stream Transcripts);
 }
 
 // The message for each chunk of audio data from the client
@@ -15,6 +15,6 @@ message AudioChunk {
 }
 
 // The message for each piece of transcribed text from the server
-message ConfirmationMsg {
-  bool received = 2; // Lets us know if this is the final result for a sentence
+message Transcripts {
+  string transcripts = 1; // Lets us know if this is the final result for a sentence
 }
