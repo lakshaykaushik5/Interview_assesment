@@ -26,6 +26,15 @@ import io
 
 load_dotenv(find_dotenv())
 
+
+import numpy as np
+
+def float32_to_int16_pcm(float32_bytes: bytes) -> bytes:
+    float32_samples = np.frombuffer(float32_bytes, dtype=np.float32)
+    int16_samples = (float32_samples * 32767).astype(np.int16)
+    return int16_samples.tobytes()
+
+
 def convert_to_16k_mono_pcm(audio_bytes, input_format="wav"):
     """
     Convert input audio bytes (e.g. wav/mp3) to 16kHz mono 16-bit PCM raw bytes.
@@ -41,9 +50,20 @@ class SpeechToTextServicer(audio_pb2_grpc.SpeechToTextServicer):
         print(" here ----- we are")
         # Create choices for event/callbacks as you prefer -- here just logging.
         def on_begin(client, event): print("Session Started:", event.id)
-        def on_turn(client, event): print("Transcript update:", event.transcript)
-        def on_termination(client, event): print("Terminated after", event.audio_duration_seconds, "seconds")
-        def on_error(client, error): print(f"Error: {error}")
+        
+        def on_turn(client, event):
+            # print(event," --------------------- ")
+            if hasattr(event, 'end_of_turn') :  # or event.final or equivalent
+                print(event.end_of_turn," -------------------")
+                if event.end_of_turn is True:
+                    print("Final turn transcript:", event.transcript , " ------> ",event.end_of_turn)
+                # Send this finalized transcript to frontend, overwrite previous partial
+ 
+            # print("Transcript update:", event.transcript,"-----\n\n\n",event.words)
+
+
+        def on_termination(client, event): print("Terminated after",  "final transcripts")
+        def on_error(client, error): print(f"Error: {error}")   
 
         client = StreamingClient(
             StreamingClientOptions(
@@ -65,9 +85,10 @@ class SpeechToTextServicer(audio_pb2_grpc.SpeechToTextServicer):
         try:
             for request in request_iterator:
                 print("Audio chunk received at", request.timestamp)
-                pcm_audio = convert_to_16k_mono_pcm(request.audio_data, input_format="wav")
+                pcm_audio = float32_to_int16_pcm(request.audio_data)
 
                 client.stream(pcm_audio)
+                # client.stream(request.audio_data)
                 # Optionally: Yield confirmation for each chunk
                 reply = audio_pb2.ConfirmationMsg(received=True)
                 yield reply
