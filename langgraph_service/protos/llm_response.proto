@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+
+package transcripts_to_llm;
+
+service TranscriptsToLlm {
+    rpc llm_response(stream InputTranscripts) returns (stream OutputResponse);
+}
+
+
+message InputTranscripts{
+    string input_transcripts = 1;
+}
+
+message OutputResponse{
+    string output_response = 1;
+}

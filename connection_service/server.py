@@ -45,9 +45,6 @@ async def websocket_audio_sender(websocket: WebSocket):
         try:
             # Properly call the Transcribe RPC with the async generator
             call = audio_stub.Transcribe(audio_chunk_generator(websocket))
-
-            print( "call output --------- " ,call)
-            
             # call = llm_output.output()
 
             # async for Transcripts in call:
