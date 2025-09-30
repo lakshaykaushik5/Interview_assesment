@@ -3,8 +3,7 @@
 import grpc
 import warnings
 
-# import audio_pb2 as audio__pb2
-from generated import audio_pb2 as audio__pb2
+import llm_response_pb2 as llm__response__pb2
 
 GRPC_GENERATED_VERSION = '1.75.0'
 GRPC_VERSION = grpc.__version__
@@ -19,16 +18,15 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f'The grpc package installed is at version {GRPC_VERSION},'
-        + f' but the generated code in audio_pb2_grpc.py depends on'
+        + f' but the generated code in llm_response_pb2_grpc.py depends on'
         + f' grpcio>={GRPC_GENERATED_VERSION}.'
         + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
         + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
     )
 
 
-class SpeechToTextStub(object):
-    """Our service that defines the streaming function
-    """
+class TranscriptsToLlmStub(object):
+    """Missing associated documentation comment in .proto file."""
 
     def __init__(self, channel):
         """Constructor.
@@ -36,46 +34,43 @@ class SpeechToTextStub(object):
         Args:
             channel: A grpc.Channel.
         """
-        self.Transcribe = channel.stream_stream(
-                '/speech_to_text.SpeechToText/Transcribe',
-                request_serializer=audio__pb2.AudioChunk.SerializeToString,
-                response_deserializer=audio__pb2.Transcripts.FromString,
+        self.llm_response = channel.stream_stream(
+                '/transcripts_to_llm.TranscriptsToLlm/llm_response',
+                request_serializer=llm__response__pb2.InputTranscripts.SerializeToString,
+                response_deserializer=llm__response__pb2.OutputResponse.FromString,
                 _registered_method=True)
 
 
-class SpeechToTextServicer(object):
-    """Our service that defines the streaming function
-    """
+class TranscriptsToLlmServicer(object):
+    """Missing associated documentation comment in .proto file."""
 
-    def Transcribe(self, request_iterator, context):
-        """Client sends a stream of audio, server sends back a stream of text
-        """
+    def llm_response(self, request_iterator, context):
+        """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
 
-def add_SpeechToTextServicer_to_server(servicer, server):
+def add_TranscriptsToLlmServicer_to_server(servicer, server):
     rpc_method_handlers = {
-            'Transcribe': grpc.stream_stream_rpc_method_handler(
-                    servicer.Transcribe,
-                    request_deserializer=audio__pb2.AudioChunk.FromString,
-                    response_serializer=audio__pb2.Transcripts.SerializeToString,
+            'llm_response': grpc.stream_stream_rpc_method_handler(
+                    servicer.llm_response,
+                    request_deserializer=llm__response__pb2.InputTranscripts.FromString,
+                    response_serializer=llm__response__pb2.OutputResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
-            'speech_to_text.SpeechToText', rpc_method_handlers)
+            'transcripts_to_llm.TranscriptsToLlm', rpc_method_handlers)
     server.add_generic_rpc_handlers((generic_handler,))
-    server.add_registered_method_handlers('speech_to_text.SpeechToText', rpc_method_handlers)
+    server.add_registered_method_handlers('transcripts_to_llm.TranscriptsToLlm', rpc_method_handlers)
 
 
  # This class is part of an EXPERIMENTAL API.
-class SpeechToText(object):
-    """Our service that defines the streaming function
-    """
+class TranscriptsToLlm(object):
+    """Missing associated documentation comment in .proto file."""
 
     @staticmethod
-    def Transcribe(request_iterator,
+    def llm_response(request_iterator,
             target,
             options=(),
             channel_credentials=None,
@@ -88,9 +83,9 @@ class SpeechToText(object):
         return grpc.experimental.stream_stream(
             request_iterator,
             target,
-            '/speech_to_text.SpeechToText/Transcribe',
-            audio__pb2.AudioChunk.SerializeToString,
-            audio__pb2.Transcripts.FromString,
+            '/transcripts_to_llm.TranscriptsToLlm/llm_response',
+            llm__response__pb2.InputTranscripts.SerializeToString,
+            llm__response__pb2.OutputResponse.FromString,
             options,
             channel_credentials,
             insecure,

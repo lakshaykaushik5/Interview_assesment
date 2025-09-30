@@ -3,7 +3,7 @@ import asyncio
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 import grpc
-from generated import audio_pb2, audio_pb2_grpc
+from generated import audio_pb2, audio_pb2_grpc, llm_response_pb2, llm_response_pb2_grpc
 
 app = FastAPI()
 
@@ -26,6 +26,11 @@ async def audio_chunk_generator(websocket: WebSocket):
     except WebSocketDisconnect:
         # Client disconnected, stop generator
         return
+    
+
+async def transcript_to_llm_input(call):
+    async for transcript in call:
+        yield llm_response_pb2.InputTranscripts(input_transcripts=transcript.transcripts)
 
 
 @app.websocket("/ws")
@@ -42,10 +47,23 @@ async def websocket_audio_sender(websocket: WebSocket):
             call = audio_stub.Transcribe(audio_chunk_generator(websocket))
 
             print( "call output --------- " ,call)
+            
+            # call = llm_output.output()
 
-            async for confirmation in call:
-                # confirmation.received is a bool, send it as string for WebSocket text
-                await websocket.send_text(str(confirmation.received))
+            # async for Transcripts in call:
+            #     # confirmation.received is a bool, send it as string for WebSocket text
+            #     await websocket.send_text(str(Transcripts.transcripts))
+            
+            async with grpc.aio.insecure_channel("localhost:50071") as llm_channel:
+                llm_response_stub = llm_response_pb2_grpc.TranscriptsToLlm(llm_channel)
+                
+                try:
+                    
+
+                    llm_call = llm_response_stub.llm_response(transcript_to_llm_input(call))
+                
+                except Exception as e:
+                    print(f"gRPC stream error in llm_channel :-: ",e)
 
         except Exception as e:
             print(f"gRPC stream error: {e}")
@@ -54,3 +72,5 @@ async def websocket_audio_sender(websocket: WebSocket):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="localhost", port=8010)
+
+

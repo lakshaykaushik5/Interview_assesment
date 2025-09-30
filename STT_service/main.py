@@ -56,7 +56,7 @@ class SpeechToTextServicer(audio_pb2_grpc.SpeechToTextServicer):
             if hasattr(event, 'end_of_turn') :  # or event.final or equivalent
                 print(event.end_of_turn," -------------------")
                 if event.end_of_turn is True:
-                    print("Final turn transcript:", event.transcript , " ------> ",event.end_of_turn)
+                    print("Final turn transcript:", event.transcript , " ------> ",event.end_of_turn," || ",type(event.transcript)," ||")
                     output_transcripts = event.transcript
                 # Send this finalized transcript to frontend, overwrite previous partial
  
@@ -93,10 +93,11 @@ class SpeechToTextServicer(audio_pb2_grpc.SpeechToTextServicer):
                 # client.stream(request.audio_data)
                 # Optionally: Yield confirmation for each chunk
                 if output_transcripts:
+                    print(output_transcripts,"============= output transcripts =============")
                     reply = audio_pb2.Transcript(output_transcripts)
-                     yield reply
+                    yield reply
 
-                     output_transcripts = ""
+                    output_transcripts = ""
         finally:
             client.disconnect(terminate=True)
 
